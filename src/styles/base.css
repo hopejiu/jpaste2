@@ -1,0 +1,145 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   jPaste — Fluent UI / WinUI 3 Design System
+   Light theme only · Purple accent · Win10+Win11 compatible
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ── Color: Primary (WinUI Purple) ─────────────────────────────────── */
+  --color-primary: #6264E7;
+  --color-primary-hover: #5152D4;
+  --color-primary-active: #4445B6;
+  --color-primary-bg: rgba(98, 100, 231, 0.12);
+  --color-primary-alpha-12: rgba(98, 100, 231, 0.12);
+  --color-primary-alpha-06: rgba(98, 100, 231, 0.06);
+  --color-primary-alpha-04: rgba(98, 100, 231, 0.04);
+
+  /* ── Color: Neutral (WinUI Gray) ───────────────────────────────────── */
+  --color-bg: #F3F2F1;
+  --color-surface: #FFFFFF;
+  --color-surface-hover: #F5F5F5;
+  --color-surface-active: #EBEBEB;
+  --color-elevated: #ffffff;
+  --color-border: #E5E4E2;
+  --color-border-strong: #D4D3D1;
+
+  /* ── Color: Text ───────────────────────────────────────────────────── */
+  --color-text-primary: #1B1B1B;
+  --color-text-secondary: #5C5C5C;
+  --color-text-muted: #999999;
+  --color-text-on-primary: #FFFFFF;
+
+  /* ── Color: Semantic ───────────────────────────────────────────────── */
+  --color-destructive: #D13438;
+  --color-destructive-hover: #B92D31;
+  --color-destructive-alpha: rgba(209, 52, 56, 0.08);
+  --color-favorite: #F7B500;
+  --color-success: #107C10;
+
+  /* ── Typography ────────────────────────────────────────────────────── */
+  --font-family: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  --font-mono: "Cascadia Code", "Cascadia Mono", "Consolas", "Courier New", monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --line-height: 1.5;
+
+  /* ── Spacing (4px grid) ────────────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ── Border Radius (WinUI 3) ───────────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ── Elevation / Shadow ────────────────────────────────────────────── */
+  --shadow-0: none;
+  --shadow-4: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-8: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --shadow-16: 0 8px 32px rgba(0, 0, 0, 0.16);
+
+  /* ── Motion ────────────────────────────────────────────────────────── */
+  --duration-fast: 100ms;
+  --duration-normal: 150ms;
+  --duration-slow: 200ms;
+  --easing: cubic-bezier(0.4, 0, 0.2, 1);
+  --easing-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --easing-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ── Focus Ring ────────────────────────────────────────────────────── */
+  --focus-ring: 0 0 0 2px var(--color-primary);
+  --focus-ring-offset: 0 0 0 2px var(--color-surface), 0 0 0 4px var(--color-primary);
+}
+
+/* ── Reset ────────────────────────────────────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--color-bg);
+}
+
+body {
+  font-family: var(--font-family);
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-base);
+  line-height: var(--line-height);
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+input,
+button,
+select {
+  font-family: inherit;
+  font-size: inherit;
+}
+
+/* ── Focus Ring ───────────────────────────────────────────────────────── */
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
+button:focus-visible,
+input:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring-offset);
+}
+
+/* ── Reduced Motion ───────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+

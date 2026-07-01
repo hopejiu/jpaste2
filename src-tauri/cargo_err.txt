@@ -1,0 +1,28 @@
+    Checking jpaste2 v0.1.0 (F:\work\jpaste2\src-tauri)
+warning: unused import: `std::time::Duration`
+  --> src\lib.rs:22:5
+   |
+22 | use std::time::Duration;
+   |     ^^^^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0599]: no method named `app_handle` found for reference `&tauri::WebviewWindow` in the current scope
+   --> src\util.rs:190:29
+    |
+190 |     let app_handle = window.app_handle().clone();
+    |                             ^^^^^^^^^^
+    |
+    = help: items from traits can only be used if the trait is in scope
+help: trait `Manager` which provides `app_handle` is implemented but not in scope; perhaps you want to import it
+    |
+  1 + use tauri::Manager;
+    |
+help: there is a method `managed_app_handle` with a similar name
+    |
+190 |     let app_handle = window.managed_app_handle().clone();
+    |                             ++++++++
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `jpaste2` (lib) generated 1 warning
+error: could not compile `jpaste2` (lib) due to 1 previous error; 1 warning emitted

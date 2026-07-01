@@ -1,0 +1,134 @@
+# jPaste v2 — Build & Release Windows EXE on tag push
+#
+# Triggers on tags matching v* (e.g. v0.1.0, v1.2.3).
+# Builds the Tauri app in release mode and uploads the installer
+# (.msi / .exe) to a GitHub Release.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, e.g. v0.1.0 (required for manual run)'
+        required: true
+        default: ''
+      draft:
+        description: 'Create as draft instead of publishing'
+        required: false
+        default: false
+        type: boolean
+  push:
+    tags:
+      - 'v*'
+
+# Grant permission to create/update the GitHub Release
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Validate manual tag input
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace("${{ github.event.inputs.tag }}")) {
+            Write-Error "Manual run requires a 'tag' input (e.g. v0.1.0). Release not created."
+            exit 1
+          }
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Enable pnpm
+        run: corepack enable && corepack prepare pnpm@10.10.0 --activate
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          cache-on-failure: true
+
+      # Tauri v2 uses the system WebView2 (pre-installed on Windows 10+).
+      # No extra system deps needed for Windows build.
+
+      - name: Build Tauri app (release)
+        run: pnpm tauri build
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # Determine the installer path — Tauri v2 places artifacts under
+      # src-tauri/target/release/bundle/.
+      - name: Locate installer
+        id: find_installer
+        shell: pwsh
+        run: |
+          $bundleDir = "src-tauri/target/release/bundle"
+          $installers = @()
+          if (Test-Path "$bundleDir/msi") {
+            $installers += Get-ChildItem "$bundleDir/msi/*.msi"
+          }
+          if (Test-Path "$bundleDir/nsis") {
+            $installers += Get-ChildItem "$bundleDir/nsis/*.exe"
+          }
+          if ($installers.Count -eq 0) {
+            Write-Error "No installer found in $bundleDir"
+            exit 1
+          }
+          # Prefer MSI over NSIS
+          $preferred = $installers | Where-Object { $_.Extension -eq '.msi' }
+          if (-not $preferred) { $preferred = $installers }
+          $path = $preferred[0].FullName
+          Write-Output "installer=$path" >> $env:GITHUB_OUTPUT
+          Write-Output "name=$($preferred[0].Name)" >> $env:GITHUB_OUTPUT
+
+      # Also attach the portable .exe if it exists
+      - name: Locate portable exe
+        id: find_portable
+        shell: pwsh
+        run: |
+          $exe = "src-tauri/target/release/jpaste2.exe"
+          if (Test-Path $exe) {
+            $full = (Resolve-Path $exe).Path
+            Write-Output "path=$full" >> $env:GITHUB_OUTPUT
+            Write-Output "found=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Output "found=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Manual run uses the supplied tag; tag-push uses the git tag (github.ref_name).
+          tag_name: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+          name: jPaste ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+          body: |
+            ## jPaste ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+
+            Windows 剪贴板管理器。
+
+            ### 安装
+            下载 `.msi` 安装包或 `.exe` (NSIS) 安装程序运行即可。
+          draft: ${{ github.event.inputs.draft == true }}
+          prerelease: false
+          files: |
+            ${{ steps.find_installer.outputs.installer }}
+            ${{ steps.find_portable.outputs.path }}

@@ -1,0 +1,17 @@
+/* jPaste — global stylesheet entry.
+   This file only aggregates the per-module stylesheets via @import.
+   The :root design tokens live in base.css and MUST be imported first.
+   Split modules (see src/styles/*.css):
+     base.css     — design tokens, reset, focus ring, reduced motion
+     app.css      — main window, entry list, QuickLaunch, Toolbox
+     modals.css   — generic modal, error alert, shortcut help
+     settings.css — settings page, action modules
+     toast.css    — toast, entry image preview
+     viewers.css  — all viewer pages (image/json/curl/ws/calc/decoder/timestamp) */
+
+@import "./base.css";
+@import "./app.css";
+@import "./modals.css";
+@import "./settings.css";
+@import "./toast.css";
+@import "./viewers.css";

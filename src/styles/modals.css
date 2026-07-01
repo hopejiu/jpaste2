@@ -1,0 +1,171 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Modal
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: overlay-enter var(--duration-slow) var(--easing-decelerate);
+}
+
+@keyframes overlay-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-content {
+  background: var(--color-elevated);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-16);
+  min-width: 320px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  animation: modal-enter var(--duration-slow) var(--easing-decelerate);
+}
+
+@keyframes modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.modal-title {
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  color: var(--color-text-primary);
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--duration-fast) var(--easing);
+}
+
+.modal-close:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-text-primary);
+}
+
+.modal-close:active {
+  transform: scale(0.92);
+}
+
+.modal-body {
+  padding: var(--space-4);
+  overflow-y: auto;
+}
+
+/* ── Error Alert Modal ────────────────────────────────────────────────── */
+
+.error-msg {
+  margin: 0 0 var(--space-6);
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+  line-height: var(--line-height);
+}
+
+.error-btn {
+  width: 100%;
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  border: none;
+  background: var(--color-primary);
+  color: var(--color-text-on-primary);
+  font-size: var(--font-size-base);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--easing);
+}
+
+.error-btn:hover {
+  background: var(--color-primary-hover);
+}
+
+.error-btn:active {
+  transform: scale(0.98);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   Shortcut Help
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.shortcut-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.shortcut-group-title {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--space-1);
+}
+
+.shortcut-group-hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+  line-height: 1.4;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  padding: var(--space-1) 0;
+}
+
+.shortcut-key {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  flex-shrink: 0;
+  color: var(--color-primary);
+  background: var(--color-primary-alpha-12);
+  border: 1px solid var(--color-border);
+  min-width: 56px;
+  text-align: center;
+  font-size: var(--font-size-xs);
+}
+
+.shortcut-desc {
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+

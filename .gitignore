@@ -1,0 +1,19 @@
+/target
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Rust
+*.rs.bk
+Cargo.lock
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log

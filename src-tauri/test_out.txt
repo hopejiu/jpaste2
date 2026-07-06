@@ -1,0 +1,6 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.57s
+     Running unittests src\lib.rs (target\debug\deps\jpaste2_lib-3773b2426c4cd086.exe)
+error: test failed, to rerun pass `--lib`
+
+Caused by:
+  process didn't exit successfully: `D:\code\jpaste2\src-tauri\target\debug\deps\jpaste2_lib-3773b2426c4cd086.exe model::tests --nocapture` (exit code: 0xc0000139, STATUS_ENTRYPOINT_NOT_FOUND)

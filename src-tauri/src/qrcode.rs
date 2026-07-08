@@ -10,16 +10,33 @@ pub fn decode_qr_from_image(image_data: &[u8]) -> Option<String> {
     use rxing::common::HybridBinarizer;
     use rxing::{BinaryBitmap, BufferedImageLuminanceSource, DecodeHints, MultiFormatReader, Reader};
 
+    log::debug!(
+        "qrcode: decode_qr_from_image ENTER — image_data.len={}",
+        image_data.len()
+    );
+
     // Decode the image format first (PNG/JPEG/etc)
-    let img = image::load_from_memory(image_data).ok()?;
+    let img = match image::load_from_memory(image_data) {
+        Ok(img) => img,
+        Err(e) => {
+            log::debug!("qrcode: image parse FAILED ({}) — no QR decode", e);
+            return None;
+        }
+    };
     if img.width() == 0 || img.height() == 0 {
+        log::debug!("qrcode: zero-size image ({}x{}) — skip", img.width(), img.height());
         return None;
     }
+    log::debug!("qrcode: image parsed — {}x{}", img.width(), img.height());
 
     // ponytail: 1MB pixel limit; images beyond this are too large for
     // real-time QR scanning anyway. Upgrade path: downscale first.
     let rgba = img.to_rgba8();
     if (rgba.len() as u64) > 1_048_576 {
+        log::debug!(
+            "qrcode: image too large for QR scan (rgba.len={} > 1_048_576) — skip",
+            rgba.len()
+        );
         return None;
     }
     drop(rgba); // Free memory before decoding
@@ -28,15 +45,26 @@ pub fn decode_qr_from_image(image_data: &[u8]) -> Option<String> {
     let mut hints = DecodeHints::default();
     hints.TryHarder = Some(true);
 
-    reader
-        .decode_with_hints(
-            &mut BinaryBitmap::new(HybridBinarizer::new(
-                BufferedImageLuminanceSource::new(img),
-            )),
-            &mut hints,
-        )
-        .ok()
-        .map(|r| r.getText().to_string())
+    match reader.decode_with_hints(
+        &mut BinaryBitmap::new(HybridBinarizer::new(
+            BufferedImageLuminanceSource::new(img),
+        )),
+        &mut hints,
+    ) {
+        Ok(result) => {
+            let text = result.getText().to_string();
+            log::debug!(
+                "qrcode: QR DETECTED — text.len={} preview={:?}",
+                text.len(),
+                &text.chars().take(48).collect::<String>()
+            );
+            Some(text)
+        }
+        Err(e) => {
+            log::debug!("qrcode: no QR found (decode error: {})", e);
+            None
+        }
+    }
 }
 
 #[cfg(test)]

@@ -54,6 +54,10 @@ impl AppClipboardHandler {
 
                     match toast_info {
                         Some(info) => {
+                            log::debug!(
+                                "clipboard-worker: DISPATCHING toast — message={:?} icon={:?} entry_id={} actions={:?}",
+                                info.message, info.icon, info.entry_id, info.actions
+                            );
                             if let Some(app) = &handle_clone {
                                 toast::create_toast_window_inner(
                                     app, &info.message, "jPaste", &info.icon,
@@ -61,7 +65,9 @@ impl AppClipboardHandler {
                                 );
                             }
                         }
-                        None => {}
+                        None => {
+                            log::debug!("clipboard-worker: no toast to show for this clipboard event");
+                        }
                     }
                 }
                 log::debug!("clipboard-worker: channel closed, exiting");
@@ -99,8 +105,17 @@ impl AppClipboardHandler {
         // Decode QR code from image at capture time (before pipeline.process)
         let qr_text = if content.has_image {
             if let Some(ref img) = image_bytes {
-                qrcode::decode_qr_from_image(img).unwrap_or_default()
+                let detected = qrcode::decode_qr_from_image(img);
+                log::debug!(
+                    "process_with_pipeline: QR decode for image — has_image=true image_bytes={} qr_found={}",
+                    img.len(),
+                    detected.is_some()
+                );
+                detected.unwrap_or_default()
             } else {
+                log::debug!(
+                    "process_with_pipeline: has_image=true but image_bytes empty — no QR decode"
+                );
                 String::new()
             }
         } else {
@@ -170,6 +185,11 @@ impl AppClipboardHandler {
                     actions.push("qrcode".to_string());
                 }
 
+                log::debug!(
+                    "process_with_pipeline: computed toast actions={:?} (text.len={}, has_image={}, qr_text.len={})",
+                    actions, content.text.len(), content.has_image, qr_text.len()
+                );
+
                 // For single file paths: if parent dir doesn't exist, remove the
                 // "folder" action — no point offering to open a dead path.
                 let lines: Vec<&str> = content.text.lines().collect();
@@ -192,6 +212,10 @@ impl AppClipboardHandler {
                         .and_then(|s| s.settings.get_settings().ok())
                         .map(|s| s.notify_enabled)
                         .unwrap_or(false));
+                log::debug!(
+                    "process_with_pipeline: should_show={} (has_image={}, has_file_uri={}, text.len={})",
+                    should_show, content.has_image, content.has_file_uri, content.text.len()
+                );
                 if should_show
                 {
                     let (message, icon) = if content.has_image {
@@ -223,6 +247,10 @@ impl AppClipboardHandler {
                     } else {
                         return None;
                     };
+                    log::debug!(
+                        "process_with_pipeline: RETURNING toast payload — message={:?} icon={:?} entry_id={} text.len={} actions={:?}",
+                        message, icon, payload.id, content.text.len(), actions
+                    );
                     Some(toast::ToastPayload {
                         message,
                         icon,
@@ -446,6 +474,11 @@ pub fn run() {
             // can't interfere with the start_minimized decision.
             setup_window_visibility(&state, &app_handle);
 
+            // Pre-create the hidden toast window so every real toast reuses it
+            // (avoids the cold-create + show race that flashes the first
+            // image/QR toast on Windows).
+            toast::ensure_toast_window(&app_handle);
+
             // Window event handlers — registered AFTER show so stale
             // Focused(true) events from the initial show/set_focus don't
             // get caught here and interfere with startup logic.
@@ -583,6 +616,11 @@ fn setup_window_behavior(app_handle: &tauri::AppHandle, state: Arc<Mutex<AppStat
                     });
                 }
                 WindowEvent::Focused(true) => {
+                    // Prime the toast window's first show while the app is
+                    // foreground (covers start_minimized / tray launch where
+                    // the app isn't foreground at startup). Idempotent.
+                    toast::prime_toast_window(&handle);
+
                     if let Ok(mut p) = pending_hide.lock() {
                         if let Some(tx) = p.take() {
                             let _ = tx.send(());

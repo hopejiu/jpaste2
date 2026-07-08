@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'preact/hooks';
 import { listen } from '@tauri-apps/api/event';
 import { FluentIcon } from '../components/fluent-icon';
-import { info, setComponent } from '../lib/logger';
+import { debug, info, setComponent } from '../lib/logger';
 import { TOAST_SHOW } from '../lib/events';
 import { api } from '../lib/invoke';
 
@@ -45,18 +45,26 @@ export function ToastPage() {
   const [actions, setActions] = useState<string[]>([]);
   const [entryId, setEntryId] = useState<number>(0);
   const [fullText, setFullText] = useState('');
+  const [seq, setSeq] = useState<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
 
+    debug('ToastPage: effect setup (mount)');
+
     // Listen for content updates from Rust (window reuse path)
     listen<{
       title?: string; message?: string; icon?: string;
-      id?: number; text?: string; actions?: string[];
+      id?: number; text?: string; actions?: string[]; seq?: number;
     }>(TOAST_SHOW, (event) => {
-      const { title, message, icon, id, text, actions } = event.payload;
+      const { title, message, icon, id, text, actions, seq: rcvSeq } = event.payload;
+      debug('ToastPage: TOAST_SHOW received', {
+        seq: rcvSeq ?? null, title, message, icon, id,
+        actions, textLen: text?.length ?? 0,
+      });
+      if (rcvSeq !== undefined) setSeq(rcvSeq);
       if (title) setTitle(title);
       if (message !== undefined) setMessage(message);
       if (icon) setIcon(icon);
@@ -67,19 +75,29 @@ export function ToastPage() {
 
     // Initial load from hash (first mount, new window path)
     const params = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
+    const hashSeq = params.get('seq');
     setTitle(params.get('title') ?? 'jPaste');
     setMessage(params.get('message') ?? '');
     setIcon(params.get('icon') ?? 'clipboard');
     setEntryId(Number(params.get('id')) || 0);
     setFullText(params.get('text') ?? '');
+    if (hashSeq) setSeq(Number(hashSeq) || 0);
 
     const rawActions = params.get('actions');
     if (rawActions) {
       setActions(rawActions.split(',').filter(Boolean));
     }
+    debug('ToastPage: initial hash parsed', {
+      seq: hashSeq, title: params.get('title'), message: params.get('message'),
+      icon: params.get('icon'), id: params.get('id'),
+      actions: rawActions, textLen: (params.get('text') ?? '').length,
+    });
 
-    info('page loaded');
-    return () => { unlisten?.(); };
+    info('page loaded', { seq });
+    return () => {
+      unlisten?.();
+      debug('ToastPage: effect cleanup (unmount)');
+    };
   }, []);
 
   const handleActionClick = (actionId: string) => {

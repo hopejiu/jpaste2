@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { FluentIcon } from '../../components/fluent-icon';
-import { api } from '../../lib/invoke';
 import { copyToClipboard } from '../../lib/clipboard';
-import { useEntryId } from '../../hooks/use-entry-id';
+import { useViewerEntry } from '../../hooks/use-viewer-entry';
 import { info as logInfo, error as logError } from '../../lib/logger';
 import { listen } from '@tauri-apps/api/event';
 
@@ -24,22 +23,21 @@ function formatJson(str: string): string {
 }
 
 export function WsViewPage() {
-  const entryId = useEntryId();
+  const { entryId, content, error } = useViewerEntry();
   const [url, setUrl] = useState('');
   const [connected, setConnected] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [error, setError] = useState('');
   const [expandedJson, setExpandedJson] = useState<Record<number, boolean>>({});
   const wsRef = useRef<WebSocket | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!entryId) { setError('无效的条目 ID'); return; }
-    logInfo('WsViewPage', { entryId });
-    api.getEntryContent(entryId).then(setUrl).catch((e) => { setError(String(e)); logError('WsViewPage', e); });
-    return () => { wsRef.current?.close(); };
-  }, [entryId]);
+  // Close socket when the entry changes / component unmounts
+  useEffect(() => () => { wsRef.current?.close(); }, []);
+
+  useEffect(() => { if (content) setUrl(content); }, [content]);
+
+  useEffect(() => { if (entryId > 0) logInfo('WsViewPage', { entryId }); }, [entryId]);
 
   // Window hide → auto disconnect
   useEffect(() => {

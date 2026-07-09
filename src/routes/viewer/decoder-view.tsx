@@ -1,14 +1,13 @@
 import { useState, useEffect } from 'preact/hooks';
 import { FluentIcon } from '../../components/fluent-icon';
-import { useEntryId } from '../../hooks/use-entry-id';
-import { api } from '../../lib/invoke';
+import { useViewerEntry } from '../../hooks/use-viewer-entry';
 import { copyToClipboard } from '../../lib/clipboard';
-import { error as logError } from '../../lib/logger';
+
 
 type DecodeMode = 'base64' | 'url' | 'unicode';
 
 export function DecoderViewPage() {
-  const entryId = useEntryId();
+  const { content } = useViewerEntry();
   const [input, setInput] = useState('');
   const [output, setOutput] = useState('');
   const [mode, setMode] = useState<DecodeMode>('base64');
@@ -16,14 +15,12 @@ export function DecoderViewPage() {
   const [encodeMode, setEncodeMode] = useState(false);
 
   useEffect(() => {
-    if (!entryId) return;
-    api.getEntryContent(entryId).then((content) => {
-      setInput(content);
-      const detectedMode = detectMode(content);
-      setMode(detectedMode);
-      processDecode(content, detectedMode, encodeMode);
-    }).catch((e) => logError('DecoderViewPage', e));
-  }, [entryId]);
+    if (!content) return; // blank viewer for toolbox
+    setInput(content);
+    const detectedMode = detectMode(content);
+    setMode(detectedMode);
+    processDecode(content, detectedMode, encodeMode);
+  }, [content]);
 
   const detectMode = (text: string): DecodeMode => {
     const s = text.trim();

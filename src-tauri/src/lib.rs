@@ -3,6 +3,7 @@
 //! Responsible for: plugin registration, service wiring, window setup.
 //! All Tauri commands are in the `command/` module.
 
+mod capture;
 mod clipboard;
 mod command;
 mod hook;
@@ -22,11 +23,7 @@ use std::sync::Mutex;
 use tauri::{Emitter, Listener, Manager, WindowEvent};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
-use crate::model::{
-    EVENT_CLIPBOARD_UPDATED, EVENT_PASTE_ORDER_CHANGED,
-    EVENT_WINDOW_HIDING, EVENT_WINDOW_SHOWN,
-};
-use clipboard::pipeline::ClipboardPipeline;
+use crate::model::{EVENT_WINDOW_HIDING, EVENT_WINDOW_SHOWN};
 use clipboard::{start_watcher, ClipboardContent, ClipboardEventHandler, ClipboardManager};
 use command::AppState;
 
@@ -50,7 +47,7 @@ impl AppClipboardHandler {
                 while let Ok(content) = receiver.recv() {
                     let handle_ref = handle_clone.as_ref();
                     let toast_info =
-                        Self::process_with_pipeline(&state_clone, handle_ref, &content);
+                        capture::build_toast(&state_clone, handle_ref, &content);
 
                     match toast_info {
                         Some(info) => {
@@ -77,197 +74,6 @@ impl AppClipboardHandler {
         Self { sender }
     }
 
-    fn process_with_pipeline(
-        state: &Arc<Mutex<AppState>>,
-        handle: Option<&tauri::AppHandle>,
-        content: &ClipboardContent,
-    ) -> Option<toast::ToastPayload> {
-        // Skip saving if clipboard is completely empty
-        if content.text.is_empty() && !content.has_image && !content.has_file_uri {
-            return None;
-        }
-
-        // Resolve image bytes: prefer in-memory, fallback to temp file
-        let image_bytes = if content.image_data.is_some() {
-            content.image_data.clone()
-        } else if let Some(ref path) = content.image_temp_path {
-            std::fs::read(path).ok()
-        } else {
-            None
-        };
-
-        let hash = if let Some(ref img) = image_bytes {
-            util::sha256_bytes(img)
-        } else {
-            util::sha256_hex(&content.text)
-        };
-
-        // Decode QR code from image at capture time (before pipeline.process)
-        let qr_text = if content.has_image {
-            if let Some(ref img) = image_bytes {
-                let detected = qrcode::decode_qr_from_image(img);
-                log::debug!(
-                    "process_with_pipeline: QR decode for image — has_image=true image_bytes={} qr_found={}",
-                    img.len(),
-                    detected.is_some()
-                );
-                detected.unwrap_or_default()
-            } else {
-                log::debug!(
-                    "process_with_pipeline: has_image=true but image_bytes empty — no QR decode"
-                );
-                String::new()
-            }
-        } else {
-            String::new()
-        };
-
-        let pipeline = ClipboardPipeline::new(state.clone());
-
-        let result = pipeline.process(
-            &content.text,
-            content.has_image,
-            content.has_file_uri,
-            &hash,
-            image_bytes.as_deref(),
-            &qr_text,
-        );
-
-        // Clean up temp file after processing (image is now saved to final location)
-        if let Some(ref path) = content.image_temp_path {
-            let _ = std::fs::remove_file(path);
-        }
-
-        match result {
-            Ok(payload) => {
-                if let Some(app) = handle {
-                    let _ = app.emit(
-                        EVENT_CLIPBOARD_UPDATED,
-                        serde_json::to_value(&payload).unwrap_or_default(),
-                    );
-                }
-
-                // Push to filo stack (direct state access, no pipeline indirection)
-                if !content.text.is_empty() {
-                    if let Ok(s) = state.lock() {
-                        s.filostack.push(&content.text);
-                    }
-                }
-
-                // Queue mode auto-exit
-                if let Ok(s) = state.lock() {
-                    if s.filostack.mode() == "queue" && (content.has_image || content.has_file_uri) {
-                        drop(s);
-                        log::info!("filostack: auto-exit queue mode due to non-text content");
-                        if let Ok(s) = state.lock() {
-                            s.filostack.set_mode("normal");
-                            if let Ok(mut new_settings) = s.settings.get_settings() {
-                                new_settings.paste_order = "normal".to_string();
-                                let _ = s.settings.save_settings(new_settings);
-                            }
-                        }
-                        if let Some(app) = handle {
-                            let _ = app.emit(EVENT_PASTE_ORDER_CHANGED, "normal");
-                        }
-                    }
-                }
-
-                // Detect actions for toast (only text content, plus QR)
-                let mut actions: Vec<String> = if !content.text.is_empty() && !content.has_image {
-                    model::detect_actions(&content.text).into_iter().map(|s| s.to_string()).collect()
-                } else {
-                    Vec::new()
-                };
-
-                // ponytail: QR action is the only image-based action.
-                // If we add more image-based actions later, extract a shared helper.
-                if content.has_image && !qr_text.is_empty() {
-                    actions.push("qrcode".to_string());
-                }
-
-                log::debug!(
-                    "process_with_pipeline: computed toast actions={:?} (text.len={}, has_image={}, qr_text.len={})",
-                    actions, content.text.len(), content.has_image, qr_text.len()
-                );
-
-                // For single file paths: if parent dir doesn't exist, remove the
-                // "folder" action — no point offering to open a dead path.
-                let lines: Vec<&str> = content.text.lines().collect();
-                let is_single_path = lines.len() == 1
-                    && (content.has_file_uri || model::is_windows_path(lines[0]));
-                if is_single_path {
-                    let path = lines[0].trim();
-                    if let Some(parent) = std::path::Path::new(path).parent() {
-                        if !parent.exists() {
-                            actions.retain(|a| a != "folder");
-                        }
-                    }
-                }
-
-                // Collect toast info (direct state access, no pipeline indirection)
-                let should_show = content.has_image
-                    || content.has_file_uri
-                    || (!content.text.is_empty() && state.lock()
-                        .ok()
-                        .and_then(|s| s.settings.get_settings().ok())
-                        .map(|s| s.notify_enabled)
-                        .unwrap_or(false));
-                log::debug!(
-                    "process_with_pipeline: should_show={} (has_image={}, has_file_uri={}, text.len={})",
-                    should_show, content.has_image, content.has_file_uri, content.text.len()
-                );
-                if should_show
-                {
-                    let (message, icon) = if content.has_image {
-                        let msg = if !qr_text.is_empty() {
-                            format!("图片 · 检测到二维码")
-                        } else {
-                            "图片".to_string()
-                        };
-                        (msg, "image".into())
-                    } else if content.has_file_uri {
-                        let files: Vec<&str> = content.text.lines().collect();
-                        let msg = if files.len() <= 1 {
-                            files.first()
-                                .and_then(|p| std::path::Path::new(p).file_name())
-                                .and_then(|n| n.to_str())
-                                .map(|n| util::truncate(n, 60))
-                                .unwrap_or_else(|| "文件".into())
-                        } else {
-                            format!("{} 个文件", files.len())
-                        };
-                        (msg, "document".into())
-                    } else if !content.text.is_empty() {
-                        let preview = util::truncate(&content.text, 60);
-                        if payload.auto_favorited {
-                            (format!("{} ⭐ 已自动收藏", preview), "clipboard".into())
-                        } else {
-                            (preview, "clipboard".into())
-                        }
-                    } else {
-                        return None;
-                    };
-                    log::debug!(
-                        "process_with_pipeline: RETURNING toast payload — message={:?} icon={:?} entry_id={} text.len={} actions={:?}",
-                        message, icon, payload.id, content.text.len(), actions
-                    );
-                    Some(toast::ToastPayload {
-                        message,
-                        icon,
-                        entry_id: payload.id,
-                        text: content.text.clone(),
-                        actions,
-                    })
-                } else {
-                    None
-                }
-            }
-            Err(e) => {
-                log::error!("Failed to save clipboard content: {}", e);
-                None
-            }
-        }
-    }
 }
 
 impl ClipboardEventHandler for AppClipboardHandler {
@@ -309,6 +115,27 @@ fn build_services(
         log::warn!("Failed to load settings: {}", e);
     }
 
+    // Build launch hotkey map from loaded settings.
+    // ponytail: key by the canonical shortcut string (`Shortcut::to_string()`,
+    // e.g. "Alt+KeyV"), not the user-typed form ("Alt+V"). The dispatch handler
+    // compares `shortcut.to_string()`, so a mismatch silently drops the launch.
+    let launch_hotkey_map = {
+        let targets = settings.get_launch_targets().unwrap_or_default();
+        let mut map = std::collections::HashMap::new();
+        for t in &targets {
+            if t.enabled {
+                if let Some(ref hk) = t.hotkey {
+                    let key = hk
+                        .parse::<tauri_plugin_global_shortcut::Shortcut>()
+                        .map(|s| s.to_string())
+                        .unwrap_or_else(|_| hk.clone());
+                    map.insert(key, t.id.clone());
+                }
+            }
+        }
+        map
+    };
+
     let state = Arc::new(Mutex::new(AppState {
         history,
         settings,
@@ -318,6 +145,7 @@ fn build_services(
         keyboard_hook: hook::KeyboardHook::new(),
         ctrl_v_sender: Mutex::new(None),
         pinned: Mutex::new(false),
+        launch_hotkey_map: Mutex::new(launch_hotkey_map),
     }));
 
     (state, log_svc)
@@ -353,17 +181,35 @@ fn setup_hotkeys(
             .map(|d| d.hotkey.clone())
             .unwrap_or_else(|| "Alt+V".to_string())
     };
+    // Register clipboard hotkey
     if let Ok(shortcut) = hk_str.parse::<tauri_plugin_global_shortcut::Shortcut>() {
         let _ = app_handle.global_shortcut().register(shortcut);
     }
 
+    // Register all enabled launch target hotkeys
+    let launch_hotkeys: Vec<String> = {
+        let s = state.lock().unwrap();
+        let map = s.launch_hotkey_map.lock().unwrap();
+        map.keys().cloned().collect()
+    };
+    for hk in &launch_hotkeys {
+        if let Ok(s) = hk.parse::<tauri_plugin_global_shortcut::Shortcut>() {
+            let _ = app_handle.global_shortcut().register(s);
+        }
+    }
+
     let app_handle_clone = app_handle.clone();
     let s = state.lock().unwrap();
-    s.settings.on_hotkey_change(move |old_hk, new_hk| {
-        if let Ok(old) = old_hk.parse::<tauri_plugin_global_shortcut::Shortcut>() {
-            let _ = app_handle_clone.global_shortcut().unregister(old);
-        }
-        if let Ok(shortcut) = new_hk.parse::<tauri_plugin_global_shortcut::Shortcut>() {
+        s.settings.on_hotkey_change(move |old_hk, new_hk| {
+            if let Ok(old) = old_hk.parse::<tauri_plugin_global_shortcut::Shortcut>() {
+                let _ = app_handle_clone.global_shortcut().unregister(old);
+            }
+            // Empty hotkey = cleared: open only via tray. Skip register, no error.
+            if new_hk.trim().is_empty() {
+                log::info!("hotkey: cleared (was {})", old_hk);
+                return Ok(());
+            }
+            if let Ok(shortcut) = new_hk.parse::<tauri_plugin_global_shortcut::Shortcut>() {
             app_handle_clone
                 .global_shortcut()
                 .register(shortcut)
@@ -406,6 +252,34 @@ fn setup_window_visibility(state: &Arc<Mutex<AppState>>, app_handle: &tauri::App
 pub fn run() {
     eprintln!("[jPaste] starting...");
 
+    // ponytail: panic = "abort" (release profile) means ANY thread panic
+    // terminates the whole process with no log. This hook records the panic
+    // message + location + backtrace to the log file BEFORE the abort, so
+    // "occasional silent auto-exit" leaves a trace to analyze.
+    std::panic::set_hook(Box::new(|info| {
+        let payload = if let Some(s) = info.payload().downcast_ref::<&str>() {
+            (*s).to_string()
+        } else if let Some(s) = info.payload().downcast_ref::<String>() {
+            s.clone()
+        } else {
+            "<non-string panic payload>".to_string()
+        };
+        let location = info
+            .location()
+            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
+            .unwrap_or_else(|| "<unknown location>".to_string());
+        let thread_name = std::thread::current()
+            .name()
+            .unwrap_or("<unnamed>")
+            .to_string();
+        let bt = std::backtrace::Backtrace::force_capture();
+        let msg = format!(
+            "\n[CRASH] thread '{}' panicked at {}: {}\n[CRASH] backtrace:\n{}\n",
+            thread_name, location, payload, bt
+        );
+        crate::log_service::crash_log(&msg);
+    }));
+
     let app_handle_for_hotkey: HotkeyCell = Arc::new(std::sync::Mutex::new(None));
     let app_handle_for_hotkey_clone = app_handle_for_hotkey.clone();
 
@@ -415,9 +289,38 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(move |_app, _shortcut, event| {
+                .with_handler(move |_app, shortcut, event| {
                     use tauri_plugin_global_shortcut::ShortcutState;
                     if matches!(event.state, ShortcutState::Pressed) {
+                        // Determine which hotkey was pressed
+                        let hk_str = shortcut.to_string();
+
+                        // Check if this is a launch target hotkey
+                        if let Some(ref state_lock) = *state_for_hotkey_clone.lock().unwrap() {
+                            if let Ok(s) = state_lock.lock() {
+                                let map = s.launch_hotkey_map.lock().unwrap();
+                                if let Some(target_id) = map.get(&hk_str) {
+                                    // Dispatch to launch target
+                                    let target_id = target_id.clone();
+                                    let app_clone = if let Some(ref h) = *app_handle_for_hotkey_clone.lock().unwrap() {
+                                        h.clone()
+                                    } else {
+                                        return;
+                                    };
+                                    drop(map); drop(s);
+
+                                    // Call launch_target via AppState
+                                    if let Ok(s) = state_lock.lock() {
+                                        let _ = crate::command::quicklaunch::launch_target_by_hotkey(
+                                            &app_clone, &s, &target_id,
+                                        );
+                                    }
+                                    return;
+                                }
+                            }
+                        }
+
+                        // Fallback: clipboard toggle (Alt+V)
                         if let Some(ref app_handle) = *app_handle_for_hotkey_clone.lock().unwrap() {
                             if let Some(window) = app_handle.get_webview_window("main") {
                                 if window.is_visible().unwrap_or(false) {
@@ -454,6 +357,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_dialog::init())
         .setup(move |app| {
             let app_handle = app.handle().clone();
 
@@ -464,6 +368,7 @@ pub fn run() {
             std::fs::create_dir_all(&app_data)?;
 
             let (state, log_svc) = build_services(&app_data, &app_handle);
+            log::info!("Log file: {}", app_data.join("logs").display());
 
             setup_clipboard_watcher(&state, &app_handle);
             setup_hotkeys(&app_handle, &state, &app_handle_for_hotkey, &state_for_hotkey);
@@ -524,6 +429,11 @@ pub fn run() {
             command::clipboard::paste_entry,
             command::clipboard::paste_entry_and_hide,
             toast::show_toast,
+            // Image generation & export (toolbox)
+            command::image_export::generate_qr,
+            command::image_export::write_clipboard_image,
+            command::image_export::get_clipboard_text,
+            command::image_export::save_image_dialog,
             // File operations
             command::system::open_in_explorer,
             command::system::open_url,
@@ -543,6 +453,13 @@ pub fn run() {
             command::system::get_pinned,
             // Debug
             command::system::debug_log,
+            // QuickLaunch
+            command::quicklaunch::get_launch_targets,
+            command::quicklaunch::save_launch_targets,
+            command::quicklaunch::launch_target,
+            command::quicklaunch::check_target_hotkey,
+            command::quicklaunch::pick_file_path,
+            command::quicklaunch::open_quicklaunch,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

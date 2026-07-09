@@ -117,6 +117,27 @@ impl ClipboardManager {
         }
         Ok(())
     }
+
+    /// Read the current clipboard text (empty string if none).
+    pub fn get_text(&self) -> String {
+        self.ctx.get_text().unwrap_or_default()
+    }
+
+    /// Write PNG image bytes to the clipboard, marking it as a self-write so
+    /// the watcher doesn't re-capture our own generated image into history.
+    pub fn write_image(&mut self, png_bytes: &[u8]) -> Result<(), String> {
+        use clipboard_rs::common::{RustImage, RustImageData};
+        let img = RustImageData::from_bytes(png_bytes)
+            .map_err(|e| format!("Failed to decode image bytes: {}", e))?;
+        // Mark BEFORE set_image so the suppression window covers the watcher fire.
+        if let Ok(mut tracker) = self.self_tracker.lock() {
+            tracker.mark_image();
+        }
+        self.ctx
+            .set_image(img)
+            .map_err(|e| format!("Failed to write image: {}", e))?;
+        Ok(())
+    }
 }
 
 
@@ -177,6 +198,14 @@ impl ClipboardHandler for ClipboardWatcherImpl {
                     }
                 }
                 let content = mgr.read();
+                // Skip images jPaste itself just wrote (QR/SVG export copy button).
+                if content.has_image {
+                    if let Ok(tracker) = mgr.self_tracker.lock() {
+                        if tracker.is_image_self_write() {
+                            return;
+                        }
+                    }
+                }
                 self.handler.on_clipboard_change(content);
             }
             Err(e) => log::error!("clipboard: lock manager: {}", e),
@@ -193,5 +222,39 @@ mod tests {
         let tracker = Arc::new(Mutex::new(SelfWriteTracker::new()));
         let mgr = ClipboardManager::with_shared_tracker(tracker);
         assert!(mgr.is_ok());
+    }
+
+    #[test]
+    fn test_clipboard_content_default() {
+        let content = ClipboardContent::default();
+        assert!(content.text.is_empty(), "text should be empty");
+        assert!(!content.has_image, "has_image should be false");
+        assert!(!content.has_file_uri, "has_file_uri should be false");
+        assert!(content.image_data.is_none(), "image_data should be none");
+        assert!(content.image_temp_path.is_none(), "image_temp_path should be none");
+    }
+
+    #[test]
+    fn test_clipboard_content_clone() {
+        let content = ClipboardContent {
+            text: "hello".to_string(),
+            has_image: true,
+            has_file_uri: false,
+            image_data: Some(vec![1, 2, 3]),
+            image_temp_path: Some("temp/path".to_string()),
+        };
+        let cloned = content.clone();
+        assert_eq!(cloned.text, "hello");
+        assert!(cloned.has_image);
+        assert_eq!(cloned.image_data, Some(vec![1, 2, 3]));
+        assert_eq!(cloned.image_temp_path, Some("temp/path".to_string()));
+    }
+
+    #[test]
+    fn test_read_image_returns_none_when_no_image() {
+        let tracker = Arc::new(Mutex::new(SelfWriteTracker::new()));
+        let mut mgr = ClipboardManager::with_shared_tracker(tracker).unwrap();
+        // No image on clipboard → should return None
+        assert!(mgr.read_image().is_none());
     }
 }

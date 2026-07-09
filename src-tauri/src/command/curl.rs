@@ -4,7 +4,9 @@
 pub struct CurlResponse {
     pub status_code: u16,
     pub status_text: String,
-    pub headers: std::collections::HashMap<String, String>,
+    // ponytail: `Vec` (not `HashMap`) preserves duplicate header names, e.g. multiple
+    // `set-cookie`. The frontend renders them as multi-value rows / a Cookie block.
+    pub headers: Vec<(String, String)>,
     pub body: String,
     pub duration_ms: i64,
 }

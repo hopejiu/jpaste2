@@ -5,6 +5,8 @@ import { Router, Route, Switch } from 'wouter';
 import { useHashPathLocation } from './hooks/use-hash-path-location';
 import { MainPage } from './routes/main';
 import { SettingsPage } from './routes/settings';
+import { ToolboxPage } from './routes/toolbox';
+import { QuickLaunchPage } from './routes/quicklaunch';
 import { JsonViewPage } from './routes/viewer/json-view';
 import { ImageViewPage } from './routes/viewer/image-view';
 import { CurlViewPage } from './routes/viewer/curl-view';
@@ -12,6 +14,8 @@ import { WsViewPage } from './routes/viewer/ws-view';
 import { CalcViewPage } from './routes/viewer/calc-view';
 import { DecoderViewPage } from './routes/viewer/decoder-view';
 import { TimestampViewPage } from './routes/viewer/timestamp-view';
+import { QrViewPage } from './routes/viewer/qr-view';
+import { SvgViewPage } from './routes/viewer/svg-view';
 import { ToastPage } from './routes/toast';
 import { setComponent } from './lib/logger';
 import { useTauriEvent } from './hooks/use-events';
@@ -29,6 +33,8 @@ export function App() {
     <Router hook={useHashPathLocation}>
       <Switch>
         <Route path="/" component={MainPage} />
+        <Route path="/toolbox" component={ToolboxPage} />
+        <Route path="/quicklaunch" component={QuickLaunchPage} />
         <Route path="/settings" component={SettingsPage} />
         <Route path="/toast" component={ToastPage} />
         <Route path="/viewer/json" component={JsonViewPage} />
@@ -38,6 +44,8 @@ export function App() {
         <Route path="/viewer/calc" component={CalcViewPage} />
         <Route path="/viewer/decoder" component={DecoderViewPage} />
         <Route path="/viewer/timestamp" component={TimestampViewPage} />
+        <Route path="/viewer/qr" component={QrViewPage} />
+        <Route path="/viewer/svg" component={SvgViewPage} />
         <Route>404: Not Found</Route>
       </Switch>
     </Router>

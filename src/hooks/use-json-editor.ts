@@ -11,7 +11,9 @@ export function useJsonEditor() {
 
   const updateJson = useCallback(async (data: any, mode?: 'tree' | 'code') => {
     const container = containerRef.current;
-    if (!container || !data) return;
+    if (!container) throw new Error('编辑器容器未就绪');
+    // ponytail: `data` can be `false`/`0` etc. — only skip explicit null/undefined.
+    if (data === null || data === undefined) throw new Error('无效的 JSON 数据：null 或 undefined');
 
     // Update existing.
     if (editorRef.current) {
@@ -20,10 +22,14 @@ export function useJsonEditor() {
     }
 
     // Lazy-load and create.
-    const [{ default: JSONEditor }, _css] = await Promise.all([
-      import('jsoneditor'),
-      import('jsoneditor/dist/jsoneditor.css'),
-    ]);
+    let JSONEditor: any;
+    try {
+      const mod = await import('jsoneditor');
+      JSONEditor = mod.default;
+      await import('jsoneditor/dist/jsoneditor.css');
+    } catch (e) {
+      throw new Error('JSON 编辑器加载失败: ' + (e instanceof Error ? e.message : String(e)));
+    }
 
     const savedMode: 'tree' | 'code' = (() => {
       try {
@@ -32,22 +38,26 @@ export function useJsonEditor() {
       } catch { return 'tree'; }
     })();
 
-    const editor = new JSONEditor(container, {
-      mode: mode || savedMode,
-      modes: ['tree', 'code'],
-      mainMenuBar: true,
-      navigationBar: true,
-      statusBar: true,
-      search: true,
-      history: true,
-      indentation: 2,
-      sortObjectKeys: false,
-      limitDragging: false,
-      onModeChange: (newMode: string) => {
-        try { localStorage.setItem('jpaste-json-mode', newMode); } catch { /* ignore */ }
-      },
-    }, data);
-    editorRef.current = editor;
+    try {
+      const editor = new JSONEditor(container, {
+        mode: mode || savedMode,
+        modes: ['tree', 'code'],
+        mainMenuBar: true,
+        navigationBar: true,
+        statusBar: true,
+        search: true,
+        history: true,
+        indentation: 2,
+        sortObjectKeys: false,
+        limitDragging: false,
+        onModeChange: (newMode: string) => {
+          try { localStorage.setItem('jpaste-json-mode', newMode); } catch { /* ignore */ }
+        },
+      }, data);
+      editorRef.current = editor;
+    } catch (e) {
+      throw new Error('JSON 编辑器创建失败: ' + (e instanceof Error ? e.message : String(e)));
+    }
   }, []);
 
   const destroyEditor = useCallback(() => {

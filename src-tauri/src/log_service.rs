@@ -227,11 +227,18 @@ impl log::Log for LogBridge {
 
 static GLOBAL_LOGGER: OnceCell<LogBridge> = OnceCell::new();
 
+/// Resolved app_data dir, filled during `init_global_logger`. The panic hook
+/// uses this to find the log directory even after the LogService itself is
+/// gone (panic = "abort" tears the process down right after the hook runs).
+static APP_DATA_DIR: OnceCell<PathBuf> = OnceCell::new();
+
 /// Initialize global logger: install LogBridge as the log crate's logger.
 /// Call this once at startup.
 pub fn init_global_logger(app_data: &Path, retention_hours: u64) -> LogService {
     let svc = LogService::init(app_data, retention_hours)
         .expect("Failed to initialize log service");
+
+    let _ = APP_DATA_DIR.set(app_data.to_path_buf());
 
     let bridge = LogBridge::new(
         svc.try_clone().expect("clone for log bridge"),
@@ -244,6 +251,33 @@ pub fn init_global_logger(app_data: &Path, retention_hours: u64) -> LogService {
         .expect("Failed to set global logger");
 
     svc
+}
+
+/// Append a fatal line (used by the panic hook) directly to the current log
+/// file with a FRESH handle — never the shared LogService writer. At panic
+/// time that writer's Mutex may already be poisoned or held; locking it again
+/// would deadlock and we'd lose the very crash we're trying to record.
+/// Always also writes to stderr. Safe to call from a panic hook.
+pub fn crash_log(line: &str) {
+    let _ = io::stderr().write_all(line.as_bytes());
+
+    let log_path = match APP_DATA_DIR.get() {
+        Some(app_data) => app_data
+            .join("logs")
+            .join(format!("jpaste-{}.log", compact_now_hour())),
+        // Logger never initialized (panic during early startup): fall back
+        // to a temp file so the crash is at least recorded somewhere.
+        None => std::env::temp_dir().join(format!("jpaste-crash-{}.log", compact_now_hour())),
+    };
+
+    if let Ok(mut f) = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&log_path)
+    {
+        let _ = f.write_all(line.as_bytes());
+        let _ = f.flush();
+    }
 }
 
 #[cfg(test)]

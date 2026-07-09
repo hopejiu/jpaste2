@@ -64,16 +64,21 @@ pub struct SelfWriteTracker {
     hash: String,
     content_len: usize,
     expires_at: Instant,
+    /// Suppression window for self-written images (see `mark_image`).
+    image_expires_at: Instant,
 }
 
 impl SelfWriteTracker {
     const TTL: Duration = Duration::from_millis(500);
+    /// Longer TTL for images: PNG re-encode + watcher delivery is slower than text.
+    const IMAGE_TTL: Duration = Duration::from_millis(1500);
 
     pub fn new() -> Self {
         Self {
             hash: String::new(),
             content_len: 0,
             expires_at: Instant::now(),
+            image_expires_at: Instant::now(),
         }
     }
 
@@ -82,6 +87,20 @@ impl SelfWriteTracker {
         self.content_len = text.len();
         self.hash = sha256_hex(text);
         self.expires_at = Instant::now() + Self::TTL;
+    }
+
+    /// Mark that jPaste just wrote an image to the clipboard.
+    /// ponytail: time-window suppression, not content-hash — PNG bytes differ
+    /// after clipboard-rs re-encode round-trip so hashing wouldn't match. Ceiling:
+    /// an unrelated image copied within IMAGE_TTL after a generate would be skipped.
+    /// Upgrade path: compare decoded RGBA pixels instead of a timer.
+    pub fn mark_image(&mut self) {
+        self.image_expires_at = Instant::now() + Self::IMAGE_TTL;
+    }
+
+    /// True if an image capture should be suppressed as our own recent write.
+    pub fn is_image_self_write(&self) -> bool {
+        Instant::now() <= self.image_expires_at
     }
 
     /// Check if the tracker has expired

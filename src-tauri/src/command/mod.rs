@@ -6,6 +6,8 @@ pub mod clipboard;
 pub mod curl;
 pub mod filostack;
 pub mod history;
+pub mod image_export;
+pub mod quicklaunch;
 pub mod settings;
 pub mod system;
 pub mod viewer;
@@ -14,6 +16,7 @@ use crate::service::history::HistoryService;
 use crate::service::settings::SettingsService;
 use crate::service::filostack::FiloStack;
 use crate::hook::KeyboardHook;
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 /// Shortcut for `state.lock().map_err(|e| e.to_string())?`
@@ -34,4 +37,6 @@ pub struct AppState {
     pub keyboard_hook: KeyboardHook,
     pub ctrl_v_sender: Mutex<Option<crate::service::filostack::CtrlVSender>>,
     pub pinned: Mutex<bool>,
+    /// Map of shortcut string → launch target id for quick dispatch.
+    pub launch_hotkey_map: Mutex<HashMap<String, String>>,
 }

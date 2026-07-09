@@ -70,6 +70,10 @@ export function SettingsPage() {
     handleSave({ hotkey: hk });
   }, [handleSave]);
 
+  const clearHotkey = useCallback(() => {
+    handleSave({ hotkey: '' });
+  }, [handleSave]);
+
   // ponytail: action_config no longer has toggle/move UI.
   // These functions were removed when the settings section became read-only reference.
   // If we ever need per-action enable/disable, the props slot is still on Settings.action_config.
@@ -95,7 +99,9 @@ export function SettingsPage() {
           <HotkeyEditor
             hotkey={local.hotkey}
             error={hotkeyError}
+            clearable
             onHotkeyChange={updateHotkey}
+            onClear={clearHotkey}
           />
         </div>
 

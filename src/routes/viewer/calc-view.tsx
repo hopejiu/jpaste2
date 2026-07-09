@@ -1,27 +1,23 @@
 import { useState, useEffect } from 'preact/hooks';
 import { FluentIcon } from '../../components/fluent-icon';
-import { useEntryId } from '../../hooks/use-entry-id';
-import { api } from '../../lib/invoke';
+import { useViewerEntry } from '../../hooks/use-viewer-entry';
 import { safeEvaluate } from '../../lib/math';
-import { error as logError } from '../../lib/logger';
 
 export function CalcViewPage() {
-  const entryId = useEntryId();
+  const { content } = useViewerEntry();
   const [expr, setExpr] = useState('');
   const [result, setResult] = useState<string | null>(null);
   const [history, setHistory] = useState<Array<{ expr: string; result: string }>>([]);
 
   useEffect(() => {
-    if (!entryId) return;
-    api.getEntryContent(entryId).then((content) => {
-      setExpr(content);
-      const r = safeEvaluate(content);
-      if (r !== null) {
-        setResult(String(r));
-        setHistory([{ expr: content.trim(), result: String(r) }]);
-      }
-    }).catch((e) => logError('CalcViewPage', e));
-  }, [entryId]);
+    if (!content) return; // blank viewer for toolbox
+    setExpr(content);
+    const r = safeEvaluate(content);
+    if (r !== null) {
+      setResult(String(r));
+      setHistory([{ expr: content.trim(), result: String(r) }]);
+    }
+  }, [content]);
 
   const handleEval = () => {
     const r = safeEvaluate(expr);

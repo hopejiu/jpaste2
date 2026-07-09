@@ -12,8 +12,17 @@ import { copyToClipboard } from '../../lib/clipboard';
 import { error as logError, setComponent } from '../../lib/logger';
 import { searchQuery, tagFilter, isRegex, setSearchQuery, setTagFilter, setIsRegex, deleteEntry, toggleFavorite } from '../../hooks/use-entries';
 import { useMainPage } from './use-main-page';
+import { useSidebarTabShortcuts } from '../../hooks/use-sidebar-tabs';
 
 setComponent('main');
+
+/** Get the current hash path without leading '#' or query string. */
+function currentBasePath() {
+  const hash = window.location.hash;
+  const p = hash.startsWith('#') ? hash.slice(1) : hash;
+  const quest = p.indexOf('?');
+  return quest >= 0 ? p.slice(0, quest) : p;
+}
 
 export function MainPage() {
   const {
@@ -31,22 +40,38 @@ export function MainPage() {
     handleSortChange, setPasteOrder,
   } = useMainPage();
 
+  useSidebarTabShortcuts();
+
   const tagTabs = TAG_TABS;
+  const basePath = currentBasePath();
+
+  const sidebarItems = [
+    { path: '/', icon: 'clipboard' as const, label: '剪贴板' },
+    { path: '/toolbox', icon: 'toolbox' as const, label: '工具箱' },
+  ];
 
   return (
     <div class="main-page">
-      {/* Title Bar */}
+      {/* Title Bar — also serves as sidebar nav */}
       <div class="title-bar" data-tauri-drag-region>
         <div class="title-left">
-          <div class="title-icon">
-            <FluentIcon name="clipboard" size={20} />
-          </div>
-          <button class="title-btn" title="设置" onClick={() => window.location.hash = '/settings'} aria-label="设置">
-            <FluentIcon name="settings" size={18} />
-          </button>
+          {sidebarItems.map((item) => (
+            <button
+              key={item.path}
+              class={`sidebar-btn ${basePath === item.path ? 'active' : ''}`}
+              title={item.label}
+              onClick={() => window.location.hash = item.path || '/'}
+              aria-label={item.label}
+            >
+              <FluentIcon name={item.icon} size={18} />
+            </button>
+          ))}
         </div>
         <span class="title-text">jPaste</span>
         <div class="title-right">
+          <button class="title-btn" title="设置" onClick={() => window.location.hash = '/settings'} aria-label="设置">
+            <FluentIcon name="settings" size={18} />
+          </button>
           <button
             class={`title-btn ${pinned ? 'active' : ''}`}
             title={pinned ? '取消置顶' : '置顶窗口'}
@@ -54,8 +79,8 @@ export function MainPage() {
               try {
                 const newPinned = await api.togglePinned();
                 setPinned(newPinned);
-              } catch (e) { logError('toggle pinned', e); }
-            }}
+              } catch (e) { logError('toggle pinned', e); }}
+            }
             aria-label={pinned ? '取消置顶' : '置顶窗口'}
           >
             <FluentIcon name="pin" size={18} filled={pinned} />
@@ -128,7 +153,7 @@ export function MainPage() {
           <button class="help-btn" onClick={() => setShowHelp(true)} title="快捷键说明" aria-label="快捷键说明">
             <FluentIcon name="help" size={18} />
           </button>
-          <span class="bottom-hints">Ctrl+L搜索 · E编辑 · C复制 · Del删除 · Space收藏 · Esc隐藏</span>
+          <span class="bottom-hints">Ctrl+L搜索 · E编辑 · C复制 · Del删除 · Space收藏 · [ ]切换 · Esc隐藏</span>
         </div>
         <QueuePopup
           mode={filoMode.value}

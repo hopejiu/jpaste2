@@ -1,3 +1,0 @@
-src/actions/qrcode.ts(18,10): error TS6133: 'content' is declared but its value is never read.
-src/routes/main/entry-item.tsx(48,63): error TS2554: Expected 1 arguments, but got 2.
-src/routes/main/index.tsx(14,34): error TS6133: 'TAG_QR' is declared but its value is never read.

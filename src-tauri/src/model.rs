@@ -342,4 +342,109 @@ mod tests {
         // Should be json only (higher priority)
         assert!(v.contains(&"json") || v.contains(&"open-url"), "json_url: {:?}", v);
     }
+
+    #[test]
+    fn test_detect_url_with_query_params() {
+        let v = detect_actions("https://example.com/page?foo=bar&baz=qux");
+        assert!(v.contains(&"open-url"), "URL with query params: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_timestamp_out_of_range_low() {
+        let v = detect_actions("100000"); // year 1970, too small
+        assert!(!v.contains(&"timestamp"), "too-small timestamp: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_timestamp_out_of_range_high() {
+        let v = detect_actions("9999999999999"); // year 2286+, too large
+        assert!(!v.contains(&"timestamp"), "too-large timestamp: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_decoder_url_encoded() {
+        let v = detect_actions("hello%20world%21");
+        assert!(v.contains(&"decoder"), "URL-encoded: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_decoder_unicode_escape() {
+        let v = detect_actions("\\u0048\\u0065\\u006c\\u006c\\u006f");
+        assert!(v.contains(&"decoder"), "unicode escape: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_decoder_base64_with_padding() {
+        let v = detect_actions("SGVsbG8gV29ybGQ=");
+        assert!(v.contains(&"decoder"), "base64 with padding: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_decoder_base64_no_padding() {
+        let v = detect_actions("SGVsbG8gV29ybGQ");
+        assert!(v.contains(&"decoder"), "base64 no padding: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_math_complex() {
+        let v = detect_actions("(1+2)*3-4/2");
+        assert!(v.contains(&"math"), "complex math: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_math_single_number_not_math() {
+        let v = detect_actions("42");
+        assert!(!v.contains(&"math"), "single number should not be math");
+    }
+
+    #[test]
+    fn test_detect_ftp_url() {
+        let v = detect_actions("ftp://files.example.com/file.zip");
+        assert!(v.contains(&"open-url"), "FTP URL: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_file_url() {
+        let v = detect_actions("file:///C:/Users/test.txt");
+        assert!(v.contains(&"open-url"), "file URL: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_whitespace_only() {
+        let v = detect_actions("   \t\n  ");
+        assert!(v.is_empty(), "whitespace only: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_result_capped_and_sorted() {
+        // Content that triggers multiple actions: JSON URL + path-like
+        let v = detect_actions(r#"{"url":"http://example.com","path":"C:\\test"}"#);
+        assert!(v.len() <= 3, "capped at 3, got {}", v.len());
+        // First should be json (priority 90)
+        assert_eq!(v.first().copied(), Some("json"), "highest priority first: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_curl_with_arguments() {
+        let v = detect_actions("curl -X POST https://api.example.com/data -H 'Content-Type: application/json'");
+        assert!(v.contains(&"curl"), "curl with flags: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_curl_case_insensitive() {
+        let v = detect_actions("CURL https://example.com");
+        assert!(v.contains(&"curl"), "CURL uppercase: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_ws_url() {
+        let v = detect_actions("ws://localhost:8080/chat");
+        assert!(v.contains(&"ws"), "ws URL: {:?}", v);
+    }
+
+    #[test]
+    fn test_detect_wss_url() {
+        let v = detect_actions("wss://echo.websocket.org");
+        assert!(v.contains(&"ws"), "wss URL: {:?}", v);
+    }
 }

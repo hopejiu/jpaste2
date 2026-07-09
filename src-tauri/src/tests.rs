@@ -228,45 +228,6 @@ mod integration_tests {
     }
 
     #[test]
-    fn test_settings_change_callback_on_sort_field() {
-        let (_dir, path) = setup_test_dir();
-        let settings = SettingsService::new(&path);
-
-        let called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let called_clone = called.clone();
-
-        settings.on_settings_change(move |_old, new| {
-            assert_eq!(new.sort_field, "content_length");
-            called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-        });
-
-        let mut data = settings.get_settings().unwrap();
-        data.sort_field = "content_length".to_string();
-        settings.save_settings(data).unwrap();
-
-        assert!(called.load(std::sync::atomic::Ordering::SeqCst));
-    }
-
-    #[test]
-    fn test_settings_no_callback_when_unchanged() {
-        let (_dir, path) = setup_test_dir();
-        let settings = SettingsService::new(&path);
-
-        let call_count = std::sync::Arc::new(std::sync::atomic::AtomicU32::new(0));
-        let call_count_clone = call_count.clone();
-
-        settings.on_settings_change(move |_old, _new| {
-            call_count_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-        });
-
-        // Save same data - should not trigger callback
-        let data = settings.get_settings().unwrap();
-        settings.save_settings(data).unwrap();
-
-        assert_eq!(call_count.load(std::sync::atomic::Ordering::SeqCst), 0);
-    }
-
-    #[test]
     fn test_image_list_with_search() {
         let (_dir, path) = setup_test_dir();
         let history = HistoryService::new(&path).unwrap();

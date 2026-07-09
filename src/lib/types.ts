@@ -67,6 +67,19 @@ export interface ClipboardUpdatePayload {
   auto_favorited: boolean;
 }
 
+// ── Launch Target types ────────────────────────────────────────────────
+
+export type LaunchTargetKind = 'web' | 'file';
+
+export interface LaunchTarget {
+  id: string;
+  name: string;
+  kind: LaunchTargetKind;
+  target: string;
+  hotkey: string | null;
+  enabled: boolean;
+}
+
 // ── Tag constants ──────────────────────────────────────────────────────
 
 export const TAG_TEXT = 1 << 0;

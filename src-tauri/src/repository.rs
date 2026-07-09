@@ -562,16 +562,11 @@ impl Repository {
             "UPDATE entries SET copy_count = copy_count + 1 WHERE id = ?1",
             params![id],
         )?;
-        self.db.query_row(
-            "SELECT copy_count FROM entries WHERE id = ?1",
-            params![id],
-            |row| row.get(0),
-        )
+        self.read_copy_count(id)
     }
 
-    /// Read the current copy_count for an entry.
-    #[allow(dead_code)]
-    pub fn get_copy_count(&self, id: i64) -> SqlResult<i64> {
+    /// Read the current copy_count for an entry by id.
+    fn read_copy_count(&self, id: i64) -> SqlResult<i64> {
         self.db.query_row(
             "SELECT copy_count FROM entries WHERE id = ?1",
             params![id],
@@ -586,24 +581,16 @@ impl Repository {
         // Use bound parameter instead of format! for cutoff
         let sql = "DELETE FROM entries WHERE updated_at < (CAST(strftime('%s', 'now') AS INTEGER) - CAST(?1 AS INTEGER) * 86400) * 1000 AND is_favorite = 0 RETURNING image_path, thumb_path";
 
-        let mut stmt = self.db.prepare(sql)?;
-        let rows = stmt.query_map(params![retain_days], |row| {
-            let img: String = row.get(0)?;
-            let thumb: String = row.get(1)?;
-            Ok((img, thumb))
-        })?;
-
+        let pairs = self.collect_path_pairs(sql, params![retain_days])?;
         let mut paths = Vec::new();
         let mut count = 0u64;
-        for row in rows {
+        for (img, thumb) in pairs {
             count += 1;
-            if let Ok((img, thumb)) = row {
-                if !img.is_empty() {
-                    paths.push(img);
-                }
-                if !thumb.is_empty() {
-                    paths.push(thumb);
-                }
+            if !img.is_empty() {
+                paths.push(img);
+            }
+            if !thumb.is_empty() {
+                paths.push(thumb);
             }
         }
 
@@ -623,7 +610,8 @@ impl Repository {
         } else {
             ""
         };
-        let paths = Self::collect_image_paths(&self.db, where_clause)?;
+        let pairs = self.collect_path_pairs(&format!("SELECT image_path, thumb_path FROM entries{}", where_clause), &[])?;
+        let paths = Self::flatten_paths(pairs);
 
         if keep_favorites {
             self.db
@@ -635,27 +623,43 @@ impl Repository {
         Ok(paths)
     }
 
-    /// Collect image and thumb paths matching an optional WHERE clause.
-    fn collect_image_paths(db: &Connection, where_clause: &str) -> SqlResult<Vec<String>> {
-        let sql = format!("SELECT image_path, thumb_path FROM entries{}", where_clause);
-        let mut stmt = db.prepare(&sql)?;
-        let rows = stmt.query_map([], |row| {
-            let img: String = row.get(0)?;
-            let thumb: String = row.get(1)?;
-            Ok((img, thumb))
+    /// Run `SELECT image_path, thumb_path ...` and return each row as a
+    /// (image_path, thumb_path) pair, skipping rows where both are empty.
+    /// Single source of truth for image/thumb collection used by cleanup,
+    /// clear_all, and get_image_storage_bytes.
+    fn collect_path_pairs(
+        &self,
+        sql: &str,
+        params: &[&dyn rusqlite::ToSql],
+    ) -> SqlResult<Vec<(String, String)>> {
+        let mut stmt = self.db.prepare(sql)?;
+        let rows = stmt.query_map(params, |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
         })?;
         let mut result = Vec::new();
         for row in rows {
-            if let Ok((img, thumb)) = row {
-                if !img.is_empty() {
-                    result.push(img);
-                }
-                if !thumb.is_empty() {
-                    result.push(thumb);
-                }
+            let (img, thumb) = row?;
+            if img.is_empty() && thumb.is_empty() {
+                continue;
             }
+            result.push((img, thumb));
         }
         Ok(result)
+    }
+
+    /// Flatten (image_path, thumb_path) pairs into a single path list,
+    /// dropping empty components.
+    fn flatten_paths(pairs: Vec<(String, String)>) -> Vec<String> {
+        let mut out = Vec::new();
+        for (img, thumb) in pairs {
+            if !img.is_empty() {
+                out.push(img);
+            }
+            if !thumb.is_empty() {
+                out.push(thumb);
+            }
+        }
+        out
     }
 
     /// Get statistics. total_bytes = text content length on disk.
@@ -691,15 +695,8 @@ impl Repository {
     /// Collects paths first, then does file I/O outside the query iteration.
     pub fn get_image_storage_bytes(&self, app_data: &std::path::Path) -> SqlResult<i64> {
         let sql = "SELECT image_path, thumb_path FROM entries WHERE image_path != ''";
-        let mut stmt = self.db.prepare(sql)?;
-        let rows = stmt.query_map([], |row| {
-            let img: String = row.get(0)?;
-            let thumb: String = row.get(1)?;
-            Ok((img, thumb))
-        })?;
-
         // Collect paths first to minimize time spent in query iteration
-        let paths: Vec<(String, String)> = rows.filter_map(|r| r.ok()).collect();
+        let paths = self.collect_path_pairs(sql, &[])?;
 
         // File I/O outside the query map iterator
         let mut total: i64 = 0;
@@ -1086,5 +1083,92 @@ mod tests {
 
         let entry = repo.get_entry(id).unwrap();
         assert_eq!(entry.image_path, "images/2026/abc.png");
+    }
+
+    #[test]
+    fn test_set_thumb_path() {
+        let (repo, _dir) = setup_repo();
+        let id = repo
+            .insert_entry("thumb_test", "", model::TAG_IMAGE, 0, "")
+            .unwrap();
+        repo.set_thumb_path(id, "thumbs/abc.webp").unwrap();
+
+        let entry = repo.get_entry(id).unwrap();
+        assert_eq!(entry.thumb_path, "thumbs/abc.webp");
+    }
+
+    #[test]
+    fn test_update_timestamp() {
+        let (repo, _dir) = setup_repo();
+        let id = repo
+            .insert_entry("ts_update", "content", 0, 7, "")
+            .unwrap();
+        let old = repo.get_entry(id).unwrap().updated_at;
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        repo.update_timestamp(id).unwrap();
+
+        let updated = repo.get_entry(id).unwrap().updated_at;
+        assert!(updated > old, "timestamp should increase");
+    }
+
+    #[test]
+    fn test_increment_copy_count() {
+        let (repo, _dir) = setup_repo();
+        let id = repo
+            .insert_entry("cc_test", "content", 0, 7, "")
+            .unwrap();
+
+        let cc = repo.increment_copy_count(id).unwrap();
+        assert_eq!(cc, 1, "first increment should be 1");
+
+        let cc = repo.increment_copy_count(id).unwrap();
+        assert_eq!(cc, 2, "second increment should be 2");
+    }
+
+    #[test]
+    fn test_set_qr_text() {
+        let (repo, _dir) = setup_repo();
+        let id = repo
+            .insert_entry("qr_test", "content", 0, 7, "")
+            .unwrap();
+
+        repo.set_qr_text(id, "decoded_qr_value").unwrap();
+        let entry = repo.get_entry(id).unwrap();
+        assert_eq!(entry.qr_text, "decoded_qr_value");
+    }
+
+    #[test]
+    fn test_find_id_by_hash() {
+        let (repo, _dir) = setup_repo();
+        let hash = "find_me_hash_123";
+        let id = repo
+            .insert_entry(hash, "content", 0, 7, "")
+            .unwrap();
+
+        let found = repo.find_id_by_hash(hash).unwrap();
+        assert_eq!(found, id, "should find existing hash");
+
+        let not_found = repo.find_id_by_hash("nonexistent").unwrap();
+        assert_eq!(not_found, 0, "should return 0 for missing hash");
+    }
+
+    #[test]
+    fn test_set_no_auto_fav_and_has_flag() {
+        let (repo, _dir) = setup_repo();
+        let id = repo
+            .insert_entry("naf_test", "content", 0, 7, "")
+            .unwrap();
+
+        // Initially false
+        assert!(!repo.has_no_auto_fav_flag(id).unwrap());
+
+        // Set to true
+        repo.set_no_auto_fav(id, true).unwrap();
+        assert!(repo.has_no_auto_fav_flag(id).unwrap());
+
+        // Set back to false
+        repo.set_no_auto_fav(id, false).unwrap();
+        assert!(!repo.has_no_auto_fav_flag(id).unwrap());
     }
 }

@@ -18,6 +18,7 @@ tauri-plugin-opener = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-autostart = "2"
 tauri-plugin-single-instance = "2"
+tauri-plugin-dialog = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
@@ -42,6 +43,7 @@ reqwest = { version = "0.12", features = ["rustls-tls"], default-features = fals
 regex = "1"
 url = { version = "2", features = [] }
 rxing = "0.8"
+base64 = "0.22"
 
 [dev-dependencies]
 tempfile = "3"
@@ -58,7 +60,11 @@ codegen-units = 1
 lto = true
 opt-level = 3
 panic = "abort"
-strip = true
+# ponytail: diagnostics — keep symbols + line tables so panic backtraces
+# resolve to function names/file:line. Flip back to `strip = true` (and drop
+# `debug`) once the auto-exit root cause is found to shrink the final binary.
+strip = false
+debug = 1
 
 #opt-level = 0
 #debug = 1

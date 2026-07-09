@@ -4,6 +4,27 @@ use std::path::Path;
 use std::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum LaunchTargetKind {
+    Web,
+    File,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LaunchTarget {
+    pub id: String,
+    pub name: String,
+    pub kind: LaunchTargetKind,
+    pub target: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hotkey: Option<String>,
+    #[serde(default = "default_enabled")]
+    pub enabled: bool,
+}
+
+fn default_enabled() -> bool { true }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Data {
     pub hotkey: String,
     pub retain_days: u32,
@@ -21,6 +42,8 @@ pub struct Data {
     pub center_on_show: bool,
     pub auto_fav_on_copy_count: bool,
     pub auto_fav_threshold: u32,
+    #[serde(default)]
+    pub launch_targets: Vec<LaunchTarget>,
 }
 
 impl Default for Data {
@@ -42,20 +65,19 @@ impl Default for Data {
             center_on_show: false,
             auto_fav_on_copy_count: false,
             auto_fav_threshold: 3,
+            launch_targets: Vec::new(),
         }
     }
 }
 
-/// Callback types for settings change notifications
+/// Callback type for hotkey change notifications
 pub type HotkeyChangeCallback = Box<dyn Fn(&str, &str) -> Result<(), String> + Send>;
-pub type SettingsChangeCallback = Box<dyn Fn(&Data, &Data) + Send>;
 
 /// SettingsService manages settings.json file with read/write and change notifications
 pub struct SettingsService {
     path: String,
     data: Mutex<Data>,
     on_hotkey_change: Mutex<Option<HotkeyChangeCallback>>,
-    on_settings_change: Mutex<Option<SettingsChangeCallback>>,
 }
 
 impl SettingsService {
@@ -64,7 +86,6 @@ impl SettingsService {
             path: app_data.join("settings.json").to_string_lossy().to_string(),
             data: Mutex::new(Data::default()),
             on_hotkey_change: Mutex::new(None),
-            on_settings_change: Mutex::new(None),
         }
     }
 
@@ -125,15 +146,25 @@ impl SettingsService {
             *data = new_data.clone();
         }
 
-        // Notify general settings change (non-critical, ignore errors)
-        if settings_changed_except_hotkey(&old_data, &new_data) {
-            if let Some(cb) = self.on_settings_change.lock().map_err(|e| e.to_string())?.as_ref() {
-                cb(&old_data, &new_data);
-            }
-        }
-
         // Persist
         self.save()
+    }
+
+    /// Update only launch_targets without triggering hotkey/settings callbacks.
+    pub fn save_launch_targets(&self, targets: Vec<LaunchTarget>) -> Result<(), String> {
+        {
+            let mut data = self.data.lock().map_err(|e| e.to_string())?;
+            data.launch_targets = targets;
+        }
+        self.save()
+    }
+
+    /// Return a snapshot of launch_targets.
+    pub fn get_launch_targets(&self) -> Result<Vec<LaunchTarget>, String> {
+        self.data
+            .lock()
+            .map(|d| d.launch_targets.clone())
+            .map_err(|e| e.to_string())
     }
 
     /// Set hotkey change callback
@@ -144,33 +175,6 @@ impl SettingsService {
         let mut callback = self.on_hotkey_change.lock().map_err(|_| ()).unwrap();
         *callback = Some(Box::new(cb));
     }
-
-    /// Set general settings change callback
-    #[allow(dead_code)]
-    pub fn on_settings_change<F>(&self, cb: F)
-    where
-        F: Fn(&Data, &Data) + Send + 'static,
-    {
-        let mut callback = self.on_settings_change.lock().map_err(|_| ()).unwrap();
-        *callback = Some(Box::new(cb));
-    }
-}
-
-fn settings_changed_except_hotkey(a: &Data, b: &Data) -> bool {
-    a.retain_days != b.retain_days
-        || a.auto_start != b.auto_start
-        || a.start_minimized != b.start_minimized
-        || a.notify_enabled != b.notify_enabled
-        || a.paste_order != b.paste_order
-        || a.sort_field != b.sort_field
-        || a.sort_order != b.sort_order
-        || a.auto_clear_search != b.auto_clear_search
-        || a.auto_clear_seconds != b.auto_clear_seconds
-        || a.auto_hide_after_copy != b.auto_hide_after_copy
-        || a.default_action != b.default_action
-        || a.center_on_show != b.center_on_show
-        || a.auto_fav_on_copy_count != b.auto_fav_on_copy_count
-        || a.auto_fav_threshold != b.auto_fav_threshold
 }
 
 #[cfg(test)]
@@ -223,24 +227,6 @@ mod tests {
 
         let mut data = svc.get_settings().unwrap();
         data.hotkey = "Ctrl+Q".to_string();
-        svc.save_settings(data).unwrap();
-
-        assert!(called.load(std::sync::atomic::Ordering::SeqCst));
-    }
-
-    #[test]
-    fn test_settings_change_callback_on_paste_order() {
-        let (svc, _) = setup_service();
-        let called = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-        let called_clone = called.clone();
-
-        svc.on_settings_change(move |_old, new| {
-            assert_eq!(new.paste_order, "queue");
-            called_clone.store(true, std::sync::atomic::Ordering::SeqCst);
-        });
-
-        let mut data = svc.get_settings().unwrap();
-        data.paste_order = "queue".to_string();
         svc.save_settings(data).unwrap();
 
         assert!(called.load(std::sync::atomic::Ordering::SeqCst));

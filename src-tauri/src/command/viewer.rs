@@ -17,6 +17,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Config, Manager, State, WebviewUrl};
+use uuid::Uuid;
 
 /// Return `true` if the Vite dev server is reachable on its configured port.
 pub(crate) fn dev_server_alive(config: &Config) -> bool {
@@ -101,6 +102,8 @@ const VIEWERS: &[ViewerMeta] = &[
     ViewerMeta { label_prefix: "calc-viewer", route: "/viewer/calc", title: "计算器", w: 450.0, h: 600.0, min_w: 400.0, min_h: 500.0 },
     ViewerMeta { label_prefix: "decoder-viewer", route: "/viewer/decoder", title: "解码工具", w: 750.0, h: 550.0, min_w: 550.0, min_h: 450.0 },
     ViewerMeta { label_prefix: "timestamp-viewer", route: "/viewer/timestamp", title: "时间戳转换", w: 550.0, h: 500.0, min_w: 450.0, min_h: 400.0 },
+    ViewerMeta { label_prefix: "qr-viewer", route: "/viewer/qr", title: "二维码生成", w: 520.0, h: 620.0, min_w: 460.0, min_h: 520.0 },
+    ViewerMeta { label_prefix: "svg-viewer", route: "/viewer/svg", title: "SVG 转 PNG", w: 640.0, h: 640.0, min_w: 520.0, min_h: 520.0 },
 ];
 
 fn viewer_meta(route: &str) -> Option<&'static ViewerMeta> {
@@ -108,7 +111,7 @@ fn viewer_meta(route: &str) -> Option<&'static ViewerMeta> {
 }
 
 /// Build a viewer window.
-async fn build_viewer_window(
+pub(crate) async fn build_viewer_window(
     app: AppHandle,
     label: String,
     hash: String,
@@ -168,6 +171,9 @@ async fn build_viewer_window(
 /// `route` selects the viewer from the `VIEWERS` registry (or the special
 /// `/viewer/image` case with dynamic sizing). If a window for this entry
 /// already exists, it is reused (no duplicate window).
+///
+/// `id = -1` opens a blank viewer (no data loading), used by the toolbox.
+/// `id > 0` opens a viewer populated with clipboard entry data.
 #[tauri::command]
 pub async fn open_viewer(
     app: AppHandle,
@@ -175,6 +181,10 @@ pub async fn open_viewer(
     route: String,
     id: i64,
 ) -> Result<(), String> {
+    if id == -1 {
+        return open_blank_viewer(app, &route).await;
+    }
+
     // Image viewer needs special handling for dynamic sizing.
     if route == "/viewer/image" {
         let label = format!("image-viewer-{}", id);
@@ -217,5 +227,15 @@ pub async fn open_viewer(
         return Ok(());
     }
     let hash = format!("{}?id={}", meta.route, id);
+    build_viewer_window(app, label, hash, meta.title.into(), meta.w, meta.h, meta.min_w, meta.min_h).await
+}
+
+/// Open a blank viewer window (toolbox-triggered, no entry data).
+async fn open_blank_viewer(app: AppHandle, route: &str) -> Result<(), String> {
+    let meta = viewer_meta(route).ok_or_else(|| format!("unknown viewer route: {}", route))?;
+    // Use a unique label so each toolbox click opens a fresh window
+    let uid = Uuid::new_v4().to_string()[..8].to_string();
+    let label = format!("{}-blank-{}", meta.label_prefix, uid);
+    let hash = format!("{}?id=-1", meta.route);
     build_viewer_window(app, label, hash, meta.title.into(), meta.w, meta.h, meta.min_w, meta.min_h).await
 }

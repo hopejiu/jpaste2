@@ -33,6 +33,18 @@ export function formatTime(ts: number | string): { rel: string; abs: string } {
   }
 }
 
+// Relative time for a past/future timestamp (ms), matching the viewer's
+// "即将 / X 分钟前(后)" phrasing. Single source of truth for relative time.
+export function relativeTime(ts: number): string {
+  const diffSec = (ts - Date.now()) / 1000;
+  const ad = Math.abs(diffSec);
+  const suffix = diffSec >= 0 ? '后' : '前';
+  if (ad < 60) return diffSec >= 0 ? '即将' : '刚刚';
+  if (ad < 3600) return `${Math.floor(diffSec / 60)} 分钟${suffix}`;
+  if (ad < 86400) return `${Math.floor(diffSec / 3600)} 小时${suffix}`;
+  return `${Math.floor(diffSec / 86400)} 天${suffix}`;
+}
+
 export function previewContent(content: string): string {
   if (!content) return '';
   const lines = content.split('\n');

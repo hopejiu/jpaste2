@@ -77,3 +77,90 @@ pub fn remove_images(app_data: &str, paths: &[String]) -> i64 {
     }
     freed_bytes
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_save_image_file_creates_image_and_thumb() {
+        let dir = TempDir::new().unwrap();
+        let img = image::RgbImage::new(500, 500);
+        let mut buf = Vec::new();
+        let mut cursor = std::io::Cursor::new(&mut buf);
+        img.write_to(&mut cursor, image::ImageFormat::Png).unwrap();
+        let _img_size = buf.len();
+
+        let (img_path, thumb_path, total_bytes) =
+            save_image_file(dir.path().to_str().unwrap(), 1, &buf).unwrap();
+
+        // Image file should exist
+        assert!(!img_path.is_empty());
+        let full_img = dir.path().join(&img_path);
+        assert!(full_img.exists(), "image file should exist at {:?}", full_img);
+
+        // Thumbnail should exist (image > 300px)
+        assert!(!thumb_path.is_empty(), "thumb should be created for 500x500 image");
+        let full_thumb = dir.path().join(&thumb_path);
+        assert!(full_thumb.exists(), "thumb file should exist at {:?}", full_thumb);
+
+        // total_bytes should be positive and close to img_size + thumb_size
+        assert!(total_bytes > 0, "total_bytes should be > 0, got {}", total_bytes);
+    }
+
+    #[test]
+    fn test_save_image_small_no_thumbnail() {
+        let dir = TempDir::new().unwrap();
+        let img = image::RgbImage::new(10, 10);
+        let mut buf = Vec::new();
+        let mut cursor = std::io::Cursor::new(&mut buf);
+        img.write_to(&mut cursor, image::ImageFormat::Png).unwrap();
+
+        let (img_path, thumb_path, total_bytes) =
+            save_image_file(dir.path().to_str().unwrap(), 2, &buf).unwrap();
+
+        assert!(!img_path.is_empty());
+        let full_img = dir.path().join(&img_path);
+        assert!(full_img.exists());
+
+        // Small image (< 300px) should still get a thumb (same-size passthrough)
+        assert!(!thumb_path.is_empty(), "even small images should get a thumb file");
+        assert!(total_bytes > 0);
+    }
+
+    #[test]
+    fn test_remove_images_existing_files() {
+        let dir = TempDir::new().unwrap();
+        let app_data = dir.path().to_str().unwrap();
+
+        // Create test files
+        let path1 = "img1.png";
+        let path2 = "sub/img2.png";
+        std::fs::write(dir.path().join(path1), b"hello").unwrap();
+        std::fs::create_dir_all(dir.path().join("sub")).unwrap();
+        std::fs::write(dir.path().join(path2), b"world").unwrap();
+
+        let freed = remove_images(app_data, &[path1.to_string(), path2.to_string()]);
+        assert_eq!(freed, 10, "should count bytes of removed files");
+        assert!(!dir.path().join(path1).exists(), "file should be deleted");
+        assert!(!dir.path().join(path2).exists(), "file should be deleted");
+    }
+
+    #[test]
+    fn test_remove_images_nonexistent_returns_zero() {
+        let dir = TempDir::new().unwrap();
+        let freed = remove_images(
+            dir.path().to_str().unwrap(),
+            &["nonexistent.png".to_string()],
+        );
+        assert_eq!(freed, 0, "non-existent file should free 0 bytes");
+    }
+
+    #[test]
+    fn test_remove_images_empty_list() {
+        let dir = TempDir::new().unwrap();
+        let freed = remove_images(dir.path().to_str().unwrap(), &[]);
+        assert_eq!(freed, 0);
+    }
+}

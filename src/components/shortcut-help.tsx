@@ -24,7 +24,8 @@ const SHORTCUT_GROUPS = [
     { keys: 'PageUp / PageDown', desc: '按页滚动' },
   ] },
   { title: '标签', items: [
-    { keys: 'Tab / Shift+Tab', desc: '在标签页间切换' },
+    { keys: '[  /  ]', desc: '切换 剪贴板 / 工具箱' },
+    { keys: 'Tab / Shift+Tab', desc: '切换内容筛选标签' },
   ] },
   { title: '窗口', items: [
     { keys: 'Esc', desc: '隐藏窗口（无搜索词时）' },

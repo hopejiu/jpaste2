@@ -1,17 +1,14 @@
-import { useEffect, useState, useRef } from 'preact/hooks';
-import { api } from '../../lib/invoke';
+import { useEffect, useState } from 'preact/hooks';
 import { useJsonEditor } from '../../hooks/use-json-editor';
-import { useEntryId } from '../../hooks/use-entry-id';
+import { useViewerEntry } from '../../hooks/use-viewer-entry';
 import { info as logInfo, error as logError } from '../../lib/logger';
 
 export function JsonViewPage() {
-  const entryId = useEntryId();
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const fetchedRef = useRef(false);
+  const { entryId, content, loading, error: fetchError } = useViewerEntry();
+  const [parseError, setParseError] = useState('');
   const { containerRef, updateJson, destroyEditor } = useJsonEditor();
 
-  logInfo('JsonViewPage', { entryId });
+  logInfo('JsonViewPage', { entryId, hash: window.location.hash });
 
   // Capture-phase Escape: fires before jsoneditor's internal handlers
   useEffect(() => {
@@ -23,38 +20,32 @@ export function JsonViewPage() {
   }, []);
 
   useEffect(() => {
-    if (!entryId) {
-      setLoading(false);
-      setError('无效的条目 ID');
+    logInfo('JsonViewPage:content', { entryId, len: content?.length });
+    if (entryId <= 0) {
+      if (entryId === 0) return; // hook already reported invalid id
+      // id=-1: blank viewer (toolbox) — load editor with empty object so user can paste JSON
+      updateJson({}).catch((e) => logError('JsonViewPage:initEmpty', e));
       return;
     }
-    if (fetchedRef.current) return;
-    fetchedRef.current = true;
-
-    api.getEntryContent(entryId)
-      .then((data) => {
-        if (!data) {
-          setError('条目内容为空');
-          setLoading(false);
-        } else {
-          try {
-            updateJson(JSON.parse(data));
-          } catch (e: any) {
-            setError('JSON 解析失败: ' + e.message);
-          }
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        logError('JsonViewPage', e);
-        setError(String(e?.message || '获取数据失败'));
-        setLoading(false);
-      });
-  }, [entryId]);
+    if (!content) { setParseError('条目内容为空'); return; }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(content);
+    } catch (e: any) {
+      setParseError('JSON 解析失败: ' + (e?.message || e));
+      return;
+    }
+    setParseError('');
+    updateJson(parsed).catch((e: any) =>
+      setParseError('JSON 解析失败: ' + (e?.message || e)),
+    );
+  }, [content]);
 
   useEffect(() => {
     return () => destroyEditor();
   }, []);
+
+  const error = fetchError || parseError;
 
   return (
     <div class="viewer-page" style={{ position: 'relative' }}>

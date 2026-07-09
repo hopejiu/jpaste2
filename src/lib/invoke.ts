@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 export { invoke } from '@tauri-apps/api/core';
 import type {
-  Entry, QueryResult, Settings, FiloStatus, Stats, CleanupResult,
+  Entry, LaunchTarget, QueryResult, Settings, FiloStatus, Stats, CleanupResult,
 } from './types';
 
 export const api = {
@@ -145,7 +145,8 @@ export const api = {
   }): Promise<{
     status_code: number;
     status_text: string;
-    headers: Record<string, string>;
+    // ponytail: `Vec` preserves duplicate header names (e.g. multiple `set-cookie`).
+    headers: [string, string][];
     body: string;
     duration_ms: number;
   }> {
@@ -174,6 +175,59 @@ export const api = {
   // ── QR Code ──────────────────────────────────────────────────────
   scanQrText(id: number): Promise<string> {
     return invoke('scan_qr_text', { id });
+  },
+
+  // ── Image generation & export (toolbox) ────────────────────────────
+  // Returns base64 PNG (no data-URI prefix).
+  generateQr(params: {
+    content: string;
+    size: number;
+    ecLevel: string;
+    margin: number;
+    fg: string;
+    bg: string;
+  }): Promise<string> {
+    return invoke('generate_qr', params);
+  },
+
+  writeClipboardImage(bytes: number[]): Promise<void> {
+    return invoke('write_clipboard_image', { bytes });
+  },
+
+  getClipboardText(): Promise<string> {
+    return invoke('get_clipboard_text');
+  },
+
+  // Returns false if the user cancelled the save dialog.
+  saveImageDialog(bytes: number[], defaultName: string): Promise<boolean> {
+    return invoke('save_image_dialog', { bytes, defaultName });
+  },
+
+  // ── Launch Targets ────────────────────────────────────────────────
+  getLaunchTargets(): Promise<LaunchTarget[]> {
+    return invoke('get_launch_targets');
+  },
+
+  saveLaunchTargets(targets: LaunchTarget[]): Promise<void> {
+    return invoke('save_launch_targets', { targets });
+  },
+
+  launchTarget(id: string): Promise<void> {
+    return invoke('launch_target', { id });
+  },
+
+  checkTargetHotkey(hotkeyStr: string, editingId?: string): Promise<void> {
+    return invoke('check_target_hotkey', { hotkeyStr, editingId: editingId ?? null });
+  },
+
+  pickFilePath(): Promise<string | null> {
+    return invoke('pick_file_path');
+  },
+
+  // ── Quick Launch window ─────────────────────────────────────────────
+  // Opens a separate window with the full Quick Launch UI.
+  openQuicklaunch(): Promise<void> {
+    return invoke('open_quicklaunch');
   },
 
   // ── Generic invoke ─────────────────────────────────────────────────

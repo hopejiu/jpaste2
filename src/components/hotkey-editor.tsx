@@ -1,17 +1,15 @@
 import { useState, useCallback, useEffect, useRef } from 'preact/hooks';
+import { FluentIcon } from './fluent-icon';
 
 const MODS = ['Ctrl', 'Alt', 'Shift', 'Win'];
 
 interface HotkeyEditorProps {
   hotkey: string;
-  error: string;
+  error?: string;
+  clearable?: boolean;
   onHotkeyChange: (mods: string[], key: string) => void;
+  onClear?: () => void;
 }
-
-const COMMON_PRESETS = [
-  { label: 'Alt+V', mods: ['Alt'], key: 'V' },
-  { label: 'Ctrl+Shift+V', mods: ['Ctrl', 'Shift'], key: 'V' },
-];
 
 function parseHotkey(hotkey: string) {
   const parts = hotkey.split('+').map((p) => p.trim());
@@ -30,7 +28,7 @@ function sortMods(mods: string[]): string[] {
   return [...mods].sort((a, b) => MODS.indexOf(a) - MODS.indexOf(b));
 }
 
-export function HotkeyEditor({ hotkey, error, onHotkeyChange }: HotkeyEditorProps) {
+export function HotkeyEditor({ hotkey, error, clearable, onHotkeyChange, onClear }: HotkeyEditorProps) {
   const parsed = parseHotkey(hotkey);
   const [recording, setRecording] = useState(false);
   const [recordError, setRecordError] = useState('');
@@ -86,45 +84,64 @@ export function HotkeyEditor({ hotkey, error, onHotkeyChange }: HotkeyEditorProp
     setRecordError('');
   }, []);
 
-  const selectPreset = useCallback((mods: string[], key: string) => {
-    onHotkeyChange(mods, key);
-  }, [onHotkeyChange]);
-
-  const currentPresetKey = sortMods(parsed.mods).concat(parsed.key ? [parsed.key] : []).join('+');
+  const keys = displayKey ? [...parsed.mods, parsed.key].filter(Boolean) : [];
 
   return (
     <div class="hotkey-editor" ref={containerRef}>
-      <div class={`hotkey-display ${recording ? 'recording' : ''}`}>
-        {recording ? (
-          <span class="hotkey-recording-hint">请按下快捷键…</span>
-        ) : (
-          <span class="hotkey-current">{displayKey || '未设置'}</span>
-        )}
-        <button class="hotkey-record-btn" onClick={startRecording} disabled={recording}>
-          {recording ? '监听中' : '录制'}
-        </button>
+      <div
+        class={`hotkey-field ${recording ? 'recording' : ''}`}
+        role="button"
+        tabIndex={0}
+        onClick={() => !recording && startRecording()}
+        onKeyDown={(e: KeyboardEvent) => {
+          if (!recording && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            startRecording();
+          }
+        }}
+      >
+        <div class="hotkey-keys">
+          {recording ? (
+            <span class="hotkey-recording-hint">请按下快捷键组合…</span>
+          ) : keys.length > 0 ? (
+            keys.map((k) => <kbd class="hotkey-key">{k}</kbd>)
+          ) : (
+            <span class="hotkey-placeholder">未设置，点击录制</span>
+          )}
+        </div>
+
+        <div class="hotkey-actions">
+          {!recording && (
+            <button
+              class="hotkey-action"
+              type="button"
+              title={keys.length > 0 ? '重新录制' : '录制快捷键'}
+              onClick={(e) => {
+                e.stopPropagation();
+                startRecording();
+              }}
+            >
+              <FluentIcon name="edit" size={15} />
+            </button>
+          )}
+          {clearable && keys.length > 0 && !recording && (
+            <button
+              class="hotkey-action hotkey-clear"
+              type="button"
+              title="清空快捷键"
+              onClick={(e) => {
+                e.stopPropagation();
+                onClear?.();
+              }}
+            >
+              <FluentIcon name="close" size={15} />
+            </button>
+          )}
+        </div>
       </div>
 
       {recordError && <div class="settings-hotkey-error">{recordError}</div>}
       {!recording && error && <div class="settings-hotkey-error">{error}</div>}
-
-      <div class="hotkey-presets">
-        <span class="settings-section-desc" style="margin-top:0">常用</span>
-        <div class="settings-segment">
-          {COMMON_PRESETS.map((preset) => {
-            const presetKey = sortMods(preset.mods).concat(preset.key).join('+');
-            return (
-              <button
-                key={presetKey}
-                class={`settings-segment-btn ${presetKey === currentPresetKey ? 'active' : ''}`}
-                onClick={() => selectPreset(preset.mods, preset.key)}
-              >
-                {preset.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 }

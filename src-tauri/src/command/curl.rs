@@ -1,15 +1,5 @@
 //! Curl HTTP request command
 
-#[derive(Debug, serde::Deserialize)]
-pub struct CurlRequest {
-    pub method: String,
-    pub url: String,
-    pub headers: std::collections::HashMap<String, String>,
-    pub body: String,
-    pub follow_redirects: bool,
-    pub timeout: u64,
-}
-
 #[derive(Debug, serde::Serialize)]
 pub struct CurlResponse {
     pub status_code: u16,
@@ -20,12 +10,19 @@ pub struct CurlResponse {
 }
 
 #[tauri::command]
-pub async fn send_curl_request(req: CurlRequest) -> Result<CurlResponse, String> {
+pub async fn send_curl_request(
+    method: String,
+    url: String,
+    headers: std::collections::HashMap<String, String>,
+    body: String,
+    follow_redirects: bool,
+    timeout: u64,
+) -> Result<CurlResponse, String> {
     let start = std::time::Instant::now();
 
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(req.timeout.max(1).min(120)))
-        .redirect(if req.follow_redirects {
+        .timeout(std::time::Duration::from_secs(timeout.max(1).min(120)))
+        .redirect(if follow_redirects {
             reqwest::redirect::Policy::limited(10)
         } else {
             reqwest::redirect::Policy::none()
@@ -33,15 +30,15 @@ pub async fn send_curl_request(req: CurlRequest) -> Result<CurlResponse, String>
         .build()
         .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
 
-    let method = reqwest::Method::from_bytes(req.method.as_bytes())
+    let method = reqwest::Method::from_bytes(method.as_bytes())
         .map_err(|e| format!("Invalid HTTP method: {}", e))?;
 
-    let mut request_builder = client.request(method, &req.url);
-    for (key, value) in &req.headers {
+    let mut request_builder = client.request(method, &url);
+    for (key, value) in &headers {
         request_builder = request_builder.header(key, value);
     }
-    if !req.body.is_empty() {
-        request_builder = request_builder.body(req.body.clone());
+    if !body.is_empty() {
+        request_builder = request_builder.body(body.clone());
     }
 
     let resp = request_builder

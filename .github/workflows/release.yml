@@ -8,6 +8,16 @@ name: Release
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, e.g. v0.1.0 (required for manual run)'
+        required: true
+        default: ''
+      draft:
+        description: 'Create as draft instead of publishing'
+        required: false
+        default: false
+        type: boolean
   push:
     tags:
       - 'v*'
@@ -22,6 +32,15 @@ jobs:
     timeout-minutes: 30
 
     steps:
+      - name: Validate manual tag input
+        if: github.event_name == 'workflow_dispatch'
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace("${{ github.event.inputs.tag }}")) {
+            Write-Error "Manual run requires a 'tag' input (e.g. v0.1.0). Release not created."
+            exit 1
+          }
+
       - name: Checkout
         uses: actions/checkout@v4
 
@@ -98,16 +117,17 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: jPaste ${{ github.ref_name }}
+          # Manual run uses the supplied tag; tag-push uses the git tag (github.ref_name).
+          tag_name: ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
+          name: jPaste ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
           body: |
-            ## jPaste ${{ github.ref_name }}
+            ## jPaste ${{ github.event.inputs.tag != '' && github.event.inputs.tag || github.ref_name }}
 
             Windows 剪贴板管理器。
 
             ### 安装
             下载 `.msi` 安装包或 `.exe` (NSIS) 安装程序运行即可。
-          draft: true
+          draft: ${{ github.event.inputs.draft == true }}
           prerelease: false
           files: |
             ${{ steps.find_installer.outputs.installer }}

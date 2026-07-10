@@ -3,19 +3,21 @@
 //! CRUD for LaunchTarget entries and execution (launch target).
 //! Data is stored in SettingsService.Data.launch_targets (settings.json).
 
+use crate::command::viewer::build_viewer_window;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, State};
-use crate::command::viewer::build_viewer_window;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tauri_plugin_global_shortcut::Shortcut;
 
-use crate::command::AppState;
 use crate::command::lock_state;
+use crate::command::AppState;
 use crate::service::settings::{LaunchTarget, LaunchTargetKind};
 
 /// Return all launch targets.
 #[tauri::command]
-pub fn get_launch_targets(state: State<'_, Arc<Mutex<AppState>>>) -> Result<Vec<LaunchTarget>, String> {
+pub fn get_launch_targets(
+    state: State<'_, Arc<Mutex<AppState>>>,
+) -> Result<Vec<LaunchTarget>, String> {
     let s = lock_state!(state);
     s.settings.get_launch_targets()
 }
@@ -83,7 +85,8 @@ pub fn launch_target_by_hotkey(app: &AppHandle, s: &AppState, id: &str) -> Resul
 }
 
 fn do_launch_by_id(app: &AppHandle, s: &AppState, id: &str) -> Result<(), String> {
-    let target = s.settings
+    let target = s
+        .settings
         .get_launch_targets()?
         .into_iter()
         .find(|t| t.id == id)
@@ -93,7 +96,11 @@ fn do_launch_by_id(app: &AppHandle, s: &AppState, id: &str) -> Result<(), String
         return Err(format!("launch target '{}' is disabled", target.name));
     }
 
-    log::info!("quicklaunch: executing {} ({})", target.name, serde_json::to_string(&target.kind).unwrap_or_default());
+    log::info!(
+        "quicklaunch: executing {} ({})",
+        target.name,
+        serde_json::to_string(&target.kind).unwrap_or_default()
+    );
 
     match target.kind {
         LaunchTargetKind::Web => launch_web(app, &target),
@@ -121,8 +128,7 @@ fn launch_web(app: &AppHandle, target: &LaunchTarget) -> Result<(), String> {
 
     // Create new webview window
     let url_str = target.target.trim().to_string();
-    let url = url::Url::parse(&url_str)
-        .map_err(|e| format!("invalid URL '{}': {}", url_str, e))?;
+    let url = url::Url::parse(&url_str).map_err(|e| format!("invalid URL '{}': {}", url_str, e))?;
 
     let label_clone = label.clone();
     let name_clone = target.name.clone();
@@ -154,7 +160,11 @@ fn launch_web(app: &AppHandle, target: &LaunchTarget) -> Result<(), String> {
                 log::info!("quicklaunch: web window created for {}", name_clone);
             }
             Err(e) => {
-                log::error!("quicklaunch: failed to create web window for {}: {}", name_clone, e);
+                log::error!(
+                    "quicklaunch: failed to create web window for {}: {}",
+                    name_clone,
+                    e
+                );
             }
         }
     });
@@ -183,7 +193,10 @@ fn manage_web_window_lifecycle(app: &AppHandle, label: &str, _name: &str) {
         let visible = window.is_visible().unwrap_or(false);
         if !visible {
             // Already hidden — wait 10min then destroy
-            log::debug!("quicklaunch: web window {} hidden, 10min destroy timer", label);
+            log::debug!(
+                "quicklaunch: web window {} hidden, 10min destroy timer",
+                label
+            );
             // Poll every 30s, check if it was re-shown
             let mut elapsed = 0u64;
             loop {
@@ -195,7 +208,10 @@ fn manage_web_window_lifecycle(app: &AppHandle, label: &str, _name: &str) {
                     Some(ref w2) => {
                         if w2.is_visible().unwrap_or(false) {
                             // Re-shown, abort destroy
-                            log::debug!("quicklaunch: web window {} re-shown, cancelling destroy", label);
+                            log::debug!(
+                                "quicklaunch: web window {} re-shown, cancelling destroy",
+                                label
+                            );
                             break;
                         }
                     }
@@ -305,7 +321,9 @@ pub fn check_target_hotkey(
 
     // 5. Temporary register + unregister to detect OS-level conflicts
     // (This will fail if the shortcut is already registered)
-    let shortcut: Shortcut = hotkey_str.parse().map_err(|_| format!("无效的快捷键格式: {}", hotkey_str))?;
+    let shortcut: Shortcut = hotkey_str
+        .parse()
+        .map_err(|_| format!("无效的快捷键格式: {}", hotkey_str))?;
     if let Err(e) = app.global_shortcut().register(shortcut.clone()) {
         return Err(format!("系统快捷键冲突: {}", e));
     }
@@ -354,7 +372,8 @@ pub fn sync_launch_hotkeys(app: &AppHandle, old: &[LaunchTarget], new: &[LaunchT
 #[tauri::command]
 pub async fn pick_file_path(app: AppHandle) -> Option<String> {
     use tauri_plugin_dialog::DialogExt;
-    let file = app.dialog()
+    let file = app
+        .dialog()
         .file()
         .add_filter("可执行程序", &["exe", "lnk"])
         .blocking_pick_file();

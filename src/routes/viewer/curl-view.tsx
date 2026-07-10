@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'preact/hooks';
+import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { FluentIcon } from '../../components/fluent-icon';
 import { copyToClipboard } from '../../lib/clipboard';
 import { api } from '../../lib/invoke';
@@ -226,6 +226,29 @@ export function CurlViewPage() {
   } | null>(null);
 
   const [respCollapsed, setRespCollapsed] = useState(false);
+  const [respHeight, setRespHeight] = useState<number | null>(null); // ponytail: null = flex-fill; drag sets explicit px
+  const respPanelRef = useRef<HTMLDivElement>(null);
+
+  // Drag the divider above the response panel to resize it.
+  const startRespResize = (e: MouseEvent) => {
+    e.preventDefault();
+    const panel = respPanelRef.current;
+    if (!panel) return;
+    const startY = e.clientY;
+    const startH = panel.getBoundingClientRect().height;
+    const onMove = (ev: MouseEvent) => {
+      const next = Math.max(120, Math.min(window.innerHeight * 0.85, startH + (startY - ev.clientY)));
+      setRespHeight(next);
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.userSelect = '';
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.body.style.userSelect = 'none';
+  };
 
   // Response body view mode: auto-detect / force JSON / force raw
   const [bodyView, setBodyView] = useState<'auto' | 'json' | 'raw'>('auto');
@@ -274,6 +297,7 @@ export function CurlViewPage() {
     setSendLoading(true);
     setResponse(null);
     setShowFullBody(false);
+    setRespCollapsed(true); // 请求前自动收起上一次的响应
     const start = Date.now();
 
     try {
@@ -296,6 +320,7 @@ export function CurlViewPage() {
       });
     }
     setSendLoading(false);
+    setRespCollapsed(false); // 请求后展开
   };
 
   // ── Response body parsing / view resolution ───────────────────────────
@@ -461,15 +486,45 @@ export function CurlViewPage() {
       </div>
 
       {!response && (
-        <div class="curl-empty-state">
-          <FluentIcon name="terminal" size={48} style={{ color: 'var(--color-text-muted)', marginBottom: '16px' }} />
-          <div style={{ fontSize: '14px', color: 'var(--color-text-secondary)' }}>配置请求参数后点击"发送"</div>
-          <div style={{ fontSize: '12px', color: 'var(--color-text-muted)', marginTop: '4px' }}>响应将显示在这里</div>
-        </div>
+        <>
+          <div class="curl-resize-handle" onMouseDown={respCollapsed ? undefined : startRespResize} title="拖动调节响应区高度" role="separator" aria-orientation="horizontal">
+            <button
+              class="curl-resize-toggle"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setRespCollapsed(!respCollapsed)}
+              title={respCollapsed ? '展开响应' : '折叠响应'}
+            >
+              <FluentIcon name={respCollapsed ? 'chevronUp' : 'chevronDown'} size={14} />
+            </button>
+          </div>
+          <div class="curl-response-panel collapsed">
+            <div class="curl-response-statusbar" style="cursor: pointer" onClick={() => setRespCollapsed(!respCollapsed)}>
+              <span class="curl-status">未发送</span>
+              {!respCollapsed && (
+                <span style={{ fontSize: 'var(--font-size-sm)', color: 'var(--color-text-muted)' }}>配置请求参数后点击"发送"</span>
+              )}
+            </div>
+          </div>
+        </>
       )}
 
       {response && (
-        <div class={`curl-response-panel ${respCollapsed ? 'collapsed' : ''}`}>
+        <>
+          <div class="curl-resize-handle" onMouseDown={respCollapsed ? undefined : startRespResize} title="拖动调节响应区高度" role="separator" aria-orientation="horizontal">
+            <button
+              class="curl-resize-toggle"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={() => setRespCollapsed(!respCollapsed)}
+              title={respCollapsed ? '展开响应' : '折叠响应'}
+            >
+              <FluentIcon name={respCollapsed ? 'chevronUp' : 'chevronDown'} size={14} />
+            </button>
+          </div>
+          <div
+            ref={respPanelRef}
+            class={`curl-response-panel ${respCollapsed ? 'collapsed' : ''}`}
+            style={respHeight != null && !respCollapsed ? { flex: `0 0 ${respHeight}px` } : undefined}
+          >
           <div class="curl-response-statusbar" style="cursor: pointer" onClick={() => setRespCollapsed(!respCollapsed)}>
             <span class={`curl-status ${statusClass(response.status_code)}`}>
               {response.status_code} {response.status_text}
@@ -547,7 +602,7 @@ export function CurlViewPage() {
             </div>
           )}
         </div>
-      )}
+      </>)}
     </div>
   );
 }

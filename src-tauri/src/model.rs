@@ -108,7 +108,10 @@ pub fn detect_actions(text: &str) -> Vec<&'static str> {
     }
 
     // curl (priority 80)
-    if s.len() > 5 && s[..5].to_ascii_lowercase() == "curl " {
+    // ponytail: use s.get(..5) (not s[..5]) — the text may start with a
+    // multibyte char, so byte index 5 isn't always a char boundary and the
+    // raw slice panics. get() returns None there, safely failing the match.
+    if s.len() > 5 && s.get(..5) == Some("curl ") {
         v.push("curl");
     }
 

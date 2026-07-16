@@ -423,12 +423,16 @@
   padding: var(--space-3);
 }
 
-/* URL Row */
+/* URL Row — sits inside .curl-card-body, so no extra padding here */
 .curl-url-row {
   display: flex;
   align-items: center;
   gap: 0;
-  padding: var(--space-3);
+}
+
+.curl-url-row .viewer-btn {
+  margin-left: var(--space-2);
+  flex-shrink: 0;
 }
 
 .curl-method-select,
@@ -448,6 +452,15 @@
   border-radius: var(--radius-sm) 0 0 var(--radius-sm);
   padding: 0 var(--space-2);
 }
+
+/* HTTP verb color-coding (Postman/Insomnia convention) */
+.curl-method-select[data-method="GET"] { color: var(--color-success); }
+.curl-method-select[data-method="POST"] { color: #C8860D; }
+.curl-method-select[data-method="PUT"] { color: #0078D4; }
+.curl-method-select[data-method="PATCH"] { color: #8764B8; }
+.curl-method-select[data-method="DELETE"] { color: var(--color-destructive); }
+.curl-method-select[data-method="HEAD"],
+.curl-method-select[data-method="OPTIONS"] { color: var(--color-text-secondary); }
 
 .curl-scheme-select {
   border-left: none;
@@ -708,22 +721,31 @@
   flex-shrink: 0;
 }
 
+.curl-status {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: var(--font-size-sm);
+  padding: 2px var(--space-2);
+  border-radius: 999px;
+  color: var(--color-text-muted);
+  background: var(--color-surface-hover);
+}
+
 .curl-status.ok {
   color: var(--color-success);
-  font-weight: 600;
-  font-size: var(--font-size-base);
+  background: rgba(16, 124, 16, 0.1);
 }
 
 .curl-status.redirect {
   color: #C8860D;
-  font-weight: 600;
-  font-size: var(--font-size-base);
+  background: rgba(200, 134, 13, 0.12);
 }
 
 .curl-status.error {
   color: var(--color-destructive);
-  font-weight: 600;
-  font-size: var(--font-size-base);
+  background: var(--color-destructive-alpha);
 }
 
 .curl-duration {

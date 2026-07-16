@@ -432,6 +432,9 @@ async fn download_handler(
             return download_not_found(format!("打开文件失败: {e} (path={path:?})"));
         }
     };
+    // Report total size so the browser download dialog shows a determinate
+    // progress bar instead of "unknown" (streaming bodies omit Content-Length).
+    let size = file.metadata().await.map(|m| m.len()).unwrap_or(0);
     let fname = path
         .file_name()
         .and_then(|n| n.to_str())
@@ -445,6 +448,15 @@ async fn download_handler(
         header::CONTENT_TYPE,
         HeaderValue::from_static("application/octet-stream"),
     );
+    // Stop the browser from MIME-sniffing (e.g. an .html/.svg/.txt payload) and
+    // rendering it inline as a page; with `attachment` this forces a download.
+    resp.headers_mut().insert(
+        header::X_CONTENT_TYPE_OPTIONS,
+        HeaderValue::from_static("nosniff"),
+    );
+    if let Ok(v) = HeaderValue::from_str(&size.to_string()) {
+        resp.headers_mut().insert(header::CONTENT_LENGTH, v);
+    }
     // RFC 5987: keep an ASCII fallback in `filename` and a UTF-8 percent-encoded
     // value in `filename*`. Raw non-ASCII in the legacy `filename` is invalid and
     // makes some mobile browsers (iOS Safari) silently refuse the download.
@@ -523,7 +535,7 @@ fn render_list_page(items: &[ShareItem]) -> String {
             .map(|item| match item.kind.as_str() {
                 "file" => format!(
                     "<div class=\"entry\"><span class=\"ico\"><svg class=\"ico-svg\"><use href=\"#doc-icon\"/></svg></span>\
-                     <span class=\"name\">{name}</span>\
+                     <a class=\"name\" href=\"/d/{id}\">{name}</a>\
                      <span class=\"size\">{size}</span>\
                      <a class=\"btn\" href=\"/d/{id}\"><svg class=\"btn-svg\"><use href=\"#dl-icon\"/></svg><span>下载</span></a></div>",
                     id = item.id,

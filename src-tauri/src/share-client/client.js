@@ -53,7 +53,7 @@ function humanSize(b) {
 function renderItem(it) {
   if (it.kind === 'file') {
     return '<div class="entry"><span class="ico"><svg class="ico-svg"><use href="#doc-icon"/></svg></span>'
-      + '<span class="name">' + esc(it.name) + '</span>'
+      + '<a class="name" href="/d/' + esc(it.id) + '">' + esc(it.name) + '</a>'
       + '<span class="size">' + humanSize(it.size) + '</span>'
       + '<a class="btn" href="/d/' + esc(it.id) + '"><svg class="btn-svg"><use href="#dl-icon"/></svg><span>下载</span></a></div>';
   }

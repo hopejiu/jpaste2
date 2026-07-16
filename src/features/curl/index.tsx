@@ -413,10 +413,10 @@ export function CurlViewPage() {
       </div>
 
       <div class="curl-request-panel curl-request-panel--with-response">
-        <SectionHeader title="请求" desc={`${method} ${fullUrl.substring(0, 60)}...`}>
+        <SectionHeader title="请求" desc={`${method} ${fullUrl.substring(0, 60)}${fullUrl.length > 60 ? '…' : ''}`}>
           <div class="curl-card-body">
             <div class="curl-url-row">
-              <select class="curl-method-select" value={method} onChange={(e) => setMethod((e.target as HTMLSelectElement).value)}>
+              <select class="curl-method-select" data-method={method} value={method} onChange={(e) => setMethod((e.target as HTMLSelectElement).value)}>
                 {METHODS.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
               <select class="curl-scheme-select" value={httpScheme} onChange={(e) => setHttpScheme((e.target as HTMLSelectElement).value)}>

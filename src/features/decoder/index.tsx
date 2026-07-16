@@ -3,8 +3,8 @@ import { FluentIcon } from '../../components/fluent-icon';
 import { useViewerEntry } from '../../hooks/use-viewer-entry';
 import { copyToClipboard } from '../../lib/clipboard';
 
-type DecodeMode = 'base64' | 'url' | 'unicode';
-const MODE_ORDER: DecodeMode[] = ['base64', 'url', 'unicode'];
+type DecodeMode = 'base64' | 'url' | 'unicode' | 'escape';
+const MODE_ORDER: DecodeMode[] = ['base64', 'url', 'unicode', 'escape'];
 
 /* ── encode / decode primitives (UTF-8 aware) ── */
 
@@ -41,11 +41,64 @@ function decodeUnicode(str: string): string {
     .replace(/\\x([0-9a-fA-F]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
 }
 
+/* ── escape / unescape (C/JSON-style backslash sequences) ── */
+
+function encodeEscape(str: string): string {
+  let out = '';
+  for (const ch of str) {
+    switch (ch) {
+      case '\\': out += '\\\\'; break;
+      case '"': out += '\\"'; break;
+      case "'": out += "\\'"; break;
+      case '\n': out += '\\n'; break;
+      case '\t': out += '\\t'; break;
+      case '\r': out += '\\r'; break;
+      case '\b': out += '\\b'; break;
+      case '\f': out += '\\f'; break;
+      case '/': out += '\\/'; break;
+      default: out += ch;
+    }
+  }
+  return out;
+}
+
+// ponytail: manual left-to-right scan so `\\n` decodes to backslash+n, not newline.
+function decodeEscape(str: string): string {
+  let out = '';
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === '\\' && i + 1 < str.length) {
+      const n = str[i + 1];
+      switch (n) {
+        case 'n': out += '\n'; break;
+        case 't': out += '\t'; break;
+        case 'r': out += '\r'; break;
+        case 'b': out += '\b'; break;
+        case 'f': out += '\f'; break;
+        case '"': out += '"'; break;
+        case "'": out += "'"; break;
+        case '/': out += '/'; break;
+        case '\\': out += '\\'; break;
+        case '0': out += '\0'; break;
+        default: out += n; // unknown escape: keep following char literally
+      }
+      i++;
+    } else {
+      out += str[i];
+    }
+  }
+  return out;
+}
+
+function isLikelyEscaped(s: string): boolean {
+  return (s.match(/\\(["'ntrb\/\\])/g) || []).length >= 2;
+}
+
 function encodeText(text: string, mode: DecodeMode): string {
   switch (mode) {
     case 'base64': return utf8ToBase64(text);
     case 'url': return encodeURIComponent(text);
     case 'unicode': return encodeUnicode(text);
+    case 'escape': return encodeEscape(text);
   }
 }
 
@@ -54,6 +107,7 @@ function decodeText(text: string, mode: DecodeMode): string {
     case 'base64': return base64ToUtf8(text);
     case 'url': return decodeURIComponent(text);
     case 'unicode': return decodeUnicode(text);
+    case 'escape': return decodeEscape(text);
   }
 }
 
@@ -69,6 +123,7 @@ function detectMode(text: string): DecodeMode {
   const s = text.trim();
   if (/%[0-9a-fA-F]{2}/.test(s)) return 'url';
   if (/\\u[0-9a-fA-F]{4}/.test(s) || /\\x[0-9a-fA-F]{2}/.test(s)) return 'unicode';
+  if (isLikelyEscaped(s)) return 'escape';
   if (isLikelyBase64(s)) return 'base64';
   return 'base64';
 }
@@ -92,6 +147,7 @@ export function DecoderViewPage() {
       const looksEncoded =
         (detected === 'url' && /%[0-9a-fA-F]{2}/.test(t)) ||
         (detected === 'unicode' && /\\u[0-9a-fA-F]{4}/.test(t)) ||
+        (detected === 'escape' && isLikelyEscaped(t)) ||
         (detected === 'base64' && isLikelyBase64(t) && t.length >= 8);
       if (looksEncoded) {
         setBottom(content);
@@ -201,7 +257,7 @@ export function DecoderViewPage() {
                 class={`decoder-mode-tab ${mode === m ? 'active' : ''}`}
                 onClick={() => handleModeChange(m)}
               >
-                {m === 'base64' ? 'Base64' : m === 'url' ? 'URL' : 'Unicode'}
+                {m === 'base64' ? 'Base64' : m === 'url' ? 'URL' : m === 'unicode' ? 'Unicode' : 'Escape'}
               </button>
             ))}
             <div class="decoder-modes-spacer" />

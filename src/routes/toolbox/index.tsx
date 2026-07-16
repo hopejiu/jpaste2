@@ -116,6 +116,8 @@ export function ToolboxPage() {
   handleOpenRef.current = handleOpen;
   const focusedRef = useRef(focusedIndex);
   focusedRef.current = focusedIndex;
+  const editingRef = useRef(editingRoute);
+  editingRef.current = editingRoute;
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -145,6 +147,14 @@ export function ToolboxPage() {
           }
           break;
         }
+        case 'Escape':
+          e.preventDefault();
+          if (editingRef.current) {
+            setEditingRoute(null);
+          } else {
+            api.invoke('hide_main_window').catch((e) => logError('hide main window', e));
+          }
+          break;
       }
     };
     document.addEventListener('keydown', handler);

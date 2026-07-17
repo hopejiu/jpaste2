@@ -30,7 +30,7 @@ fn write_entry_to_clipboard(
     // touching the clipboard manager (lock order: state -> clipboard_mgr).
     let (img_path, text) = {
         let s = lock_state!(state);
-        let img = s.history.get_entry_image_path(id).ok();
+        let img = s.history.get_entry_image_full_path(id).ok();
         let txt = if img.is_none() {
             s.history.get_entry_content(id).unwrap_or_default()
         } else {

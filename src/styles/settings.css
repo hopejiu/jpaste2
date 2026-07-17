@@ -317,7 +317,7 @@
   line-height: 1.4;
 }
 
-/* Slider */
+/* Fluent UI Slider */
 .settings-slider-row {
   display: flex;
   align-items: center;
@@ -326,10 +326,38 @@
 }
 
 .settings-slider-row input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
   flex: 1;
-  max-width: 120px;
+  max-width: 200px;
+  height: 4px;
+  background: linear-gradient(to right, var(--color-primary) var(--fill, 0%), var(--color-border) var(--fill, 0%));
+  border-radius: 2px;
+  outline: none;
   cursor: pointer;
-  accent-color: var(--color-primary);
+}
+
+.settings-slider-row input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.settings-slider-row input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.settings-slider-row input[type="range"]::-webkit-slider-thumb:active {
+  transform: scale(0.95);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .settings-slider-value {

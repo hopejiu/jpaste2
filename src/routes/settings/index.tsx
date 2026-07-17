@@ -155,6 +155,48 @@ export function SettingsPage() {
           </div>
         </div>
 
+        {/* Auto-clear search on show */}
+        <div class="settings-section">
+          <div class="settings-section-title">唤出时清空搜索</div>
+          <div class="settings-section-desc">剪贴板唤出时如果距离上次隐藏超过设定时间，自动清空搜索框</div>
+          <div class="settings-section row" style="margin-top: 8px;">
+            <span>启用</span>
+            <ToggleSwitch
+              checked={local.auto_clear_search}
+              onChange={() => handleSave({ auto_clear_search: !local.auto_clear_search })}
+            />
+          </div>
+          {local.auto_clear_search && (() => {
+            const opts = [
+              { label: '立即', value: 0 },
+              { label: '30s', value: 30 },
+              { label: '1min', value: 60 },
+              { label: '2min', value: 120 },
+              { label: '5min', value: 300 },
+            ];
+            const idx = opts.findIndex((o) => o.value === local.auto_clear_seconds);
+            const curIdx = idx >= 0 ? idx : 0;
+            return (
+              <div class="settings-slider-row">
+                <input
+                  type="range" min="0" max={opts.length - 1} step="1"
+                  value={curIdx}
+                  style={{ '--fill': `${(curIdx / (opts.length - 1)) * 100}%` } as any}
+                  onInput={(e) => {
+                    const i = parseInt((e.target as HTMLInputElement).value);
+                    setLocal({ ...local, auto_clear_seconds: opts[i].value });
+                  }}
+                  onMouseUp={(e) => {
+                    const i = parseInt((e.target as HTMLInputElement).value);
+                    handleSave({ auto_clear_seconds: opts[i].value });
+                  }}
+                />
+                <span class="settings-slider-value">{opts[curIdx].label}</span>
+              </div>
+            );
+          })()}
+        </div>
+
         {/* Auto start */}
         <div class="settings-section row">
           <div>

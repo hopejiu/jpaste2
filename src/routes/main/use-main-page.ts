@@ -1,5 +1,4 @@
 import { useEffect, useState, useCallback, useRef } from 'preact/hooks';
-import { signal } from '@preact/signals';
 import { api } from '../../lib/invoke';
 import { copyToClipboard } from '../../lib/clipboard';
 import { error as logError } from '../../lib/logger';
@@ -10,15 +9,12 @@ import {
   searchQuery, tagFilter,
   setSearchQuery, setTagFilter, setIsRegex,
   refreshEntries, loadMore, deleteEntry, toggleFavorite,
+  sortFieldSignal, sortOrderSignal,
 } from '../../hooks/use-entries';
 import { useKeyboardNavigation } from '../../hooks/use-keyboard';
 import { useTauriEvent } from '../../hooks/use-events';
 import { useMainShortcuts } from '../../hooks/use-main-shortcuts';
 import { useFiloStatus } from '../../hooks/use-filo-status';
-
-// FE-3: Sort state as signals for consistency
-const sortFieldSignal = signal('updated_at');
-const sortOrderSignal = signal('desc');
 
 /** Center the main window on the current monitor */
 async function centerWindow() {

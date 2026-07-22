@@ -418,16 +418,28 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
-  margin-left: auto;
   flex-shrink: 0;
   opacity: 0;
   transition: opacity var(--duration-normal) var(--easing);
   pointer-events: none;
 }
 
+.entry-actions.push-right {
+  margin-left: auto;
+}
+
+.entry-actions.with-fav {
+  margin-left: 0;
+}
+
 .entry-actions.visible {
   opacity: 1;
   pointer-events: auto;
+}
+
+/* Always-visible favorite star for favorited entries (far-right, matches hover star position) */
+.entry-fav-persistent {
+  margin-left: auto;
 }
 
 .act-btn {

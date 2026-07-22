@@ -201,8 +201,12 @@ impl Repository {
 
         let has_cursor = after_updated != 0;
         // ponytail: cursor field matches sort_field for consistent pagination.
-        // Falls back to updated_at if sort_field doesn't need cursor (copy_count).
-        let cursor_field = if sf == "copy_count" { "copy_count" } else { "updated_at" };
+        // All ALLOWED_SORT_FIELDS are real columns, so reuse sf directly.
+        let cursor_field = if matches!(sf, "updated_at" | "content_length" | "copy_count") {
+            sf
+        } else {
+            "updated_at"
+        };
         let cursor_sql = if has_cursor {
             let op = if so == "DESC" { "<" } else { ">" };
             format!(

@@ -11,7 +11,7 @@ import { TAG_QR } from '../../lib/types';
 // FE-5: Shared action icon mapping (single source of truth)
 export const ACTION_ICONS: Record<string, string> = {
   'open-url': 'link',
-  decoder: 'code',
+  decoder: 'type',
   json: 'code',
   folder: 'folder',
   curl: 'terminal',
@@ -92,7 +92,18 @@ export function EntryItem({
             <span class="entry-copy-count">· 使用{entry.copy_count}次</span>
           )}
 
-          <div class={`entry-actions ${showActions ? 'visible' : ''}`}>
+          {entry.is_favorite && (
+            <button
+              class="act-btn fav entry-fav-persistent"
+              onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+              title="取消收藏"
+              aria-label="取消收藏"
+            >
+              <FluentIcon name="star" size={16} filled={true} />
+            </button>
+          )}
+
+          <div class={`entry-actions ${showActions ? 'visible' : ''} ${entry.is_favorite ? 'with-fav' : 'push-right'}`}>
             {hasDetected && detectedActions.map((act) => {
               const iconName = ACTION_ICONS[act.id];
               return (
@@ -104,16 +115,19 @@ export function EntryItem({
                 >{iconName ? <FluentIcon name={iconName} size={16} /> : act.label}</button>
               );
             })}
-            <button
-              class={`act-btn ${entry.is_favorite ? 'fav' : ''}`}
-              onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
-              title={entry.is_favorite ? '取消收藏' : '收藏'}
-            >
-              <FluentIcon name="star" size={16} filled={entry.is_favorite} />
-            </button>
             {hasQr && <button class="act-btn qr" onClick={(e) => { e.stopPropagation(); onQrClick?.(); }} title="二维码" aria-label="二维码"><FluentIcon name="qrCode" size={16} /></button>}
             {!isImage && <button class="act-btn" onClick={(e) => { e.stopPropagation(); onOpenEditor(); }} title="在编辑器中打开" aria-label="在编辑器中打开"><FluentIcon name="edit" size={16} /></button>}
             <button class="act-btn danger" onClick={(e) => { e.stopPropagation(); onDelete(); }} title="删除" aria-label="删除"><FluentIcon name="delete" size={16} /></button>
+            {!entry.is_favorite && (
+              <button
+                class="act-btn"
+                onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+                title="收藏"
+                aria-label="收藏"
+              >
+                <FluentIcon name="star" size={16} filled={false} />
+              </button>
+            )}
           </div>
         </div>
       </div>

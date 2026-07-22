@@ -12,6 +12,10 @@ export const searchQuery = signal('');
 export const tagFilter = signal(0);
 export const isRegex = signal(false);
 
+// Sort state — lives with the query logic so refreshEntries/loadMore use it.
+export const sortFieldSignal = signal('updated_at');
+export const sortOrderSignal = signal('desc');
+
 // Pagination cursor as signals (was module-level mutable state)
 const cursorUpdated = signal(0);
 const cursorId = signal(0);
@@ -34,7 +38,12 @@ export async function refreshEntries() {
     cursorId.value = 0;
 
     if (isRegex.value && searchQuery.value) {
-      const result = await api.getEntriesRegex(searchQuery.value, tagFilter.value);
+      const result = await api.getEntriesRegex(
+        searchQuery.value,
+        tagFilter.value,
+        sortFieldSignal.value,
+        sortOrderSignal.value,
+      );
       entries.value = result;
       hasMore.value = false;
     } else {
@@ -42,6 +51,8 @@ export async function refreshEntries() {
         search: searchQuery.value,
         tagMask: tagFilter.value,
         limit: 20,
+        sortField: sortFieldSignal.value,
+        sortOrder: sortOrderSignal.value,
       });
       entries.value = res.entries;
       hasMore.value = res.has_more;
@@ -71,6 +82,8 @@ export async function loadMore() {
       cursorUpdated: cursorUpdated.value,
       cursorId: cursorId.value,
       limit: 20,
+      sortField: sortFieldSignal.value,
+      sortOrder: sortOrderSignal.value,
     });
 
     entries.value = [...entries.value, ...result.entries];

@@ -21,6 +21,7 @@ export function QrViewPage() {
   const { content } = useViewerEntry();
   const [text, setText] = useState('');
   const [size, setSize] = useState(320);
+  const [maxSize, setMaxSize] = useState(320);
   const [ecLevel, setEcLevel] = useState<EcLevel>('M');
   const [margin, setMargin] = useState(2);
   const [fg, setFg] = useState('#000000');
@@ -28,14 +29,41 @@ export function QrViewPage() {
   const [preview, setPreview] = useState('');
   const [err, setErr] = useState('');
   const [status, setStatus] = useState('');
+  const previewRef = useRef<HTMLDivElement>(null);
+
+  // Slider max follows the largest square that fits the preview area, so
+  // dragging to the top fills the container exactly. Recomputed on resize.
+  useEffect(() => {
+    const el = previewRef.current;
+    if (!el) return;
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      const w = el.clientWidth - padX;
+      const h = el.clientHeight - padY;
+      setMaxSize(Math.max(80, Math.floor(Math.min(w, h))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Keep size within the (window-derived) max when the container shrinks.
+  useEffect(() => {
+    if (size > maxSize) setSize(maxSize);
+  }, [maxSize, size]);
 
   // Prefill from a clipboard entry if opened with one.
   useEffect(() => {
     if (content) setText(content);
   }, [content]);
 
-  // Debounced real-time generation.
+  // Debounced real-time generation. `seq` drops stale responses so slow drags
+  // that fire several async requests can't set an older (smaller/larger) result.
   const timer = useRef<number | undefined>(undefined);
+  const seq = useRef(0);
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     if (!text.trim()) {
@@ -43,14 +71,17 @@ export function QrViewPage() {
       setErr('');
       return;
     }
+    const id = ++seq.current;
     timer.current = window.setTimeout(() => {
       api
         .generateQr({ content: text, size, ecLevel, margin, fg, bg })
         .then((b64) => {
+          if (id !== seq.current) return;
           setPreview(b64);
           setErr('');
         })
         .catch((e) => {
+          if (id !== seq.current) return;
           setPreview('');
           setErr(String(e?.message || e || '生成失败'));
         });
@@ -87,24 +118,24 @@ export function QrViewPage() {
       </div>
 
       <div class="viewer-content">
-        <div class="viewer-section">
+        <div class="viewer-section gen-form-section">
           <textarea
             class="decoder-textarea"
             value={text}
             onInput={(e) => setText((e.target as HTMLTextAreaElement).value)}
             placeholder="输入文本或链接..."
-            rows={3}
+            rows={2}
           />
 
           <div class="gen-form">
             <label class="gen-row">
               <span class="gen-label">尺寸</span>
               <input
-                type="range" min={160} max={640} step={20}
-                value={size}
+                type="range" min={Math.min(160, maxSize)} max={maxSize} step={10}
+                value={Math.min(size, maxSize)}
                 onInput={(e) => setSize(Number((e.target as HTMLInputElement).value))}
               />
-              <span class="gen-value">{size}px</span>
+              <span class="gen-value">{Math.min(size, maxSize)}px</span>
             </label>
 
             <label class="gen-row">
@@ -139,11 +170,17 @@ export function QrViewPage() {
           </div>
         </div>
 
-        <div class="viewer-section gen-preview-section">
+        <div class="viewer-section gen-preview-section" ref={previewRef}>
           {err ? (
             <div class="decoder-error">{err}</div>
           ) : preview ? (
-            <img class="gen-preview" src={`data:image/png;base64,${preview}`} alt="二维码预览" />
+            <img
+              class="gen-preview"
+              src={`data:image/png;base64,${preview}`}
+              width={size}
+              height={size}
+              alt="二维码预览"
+            />
           ) : (
             <div class="gen-placeholder">预览将显示在这里</div>
           )}

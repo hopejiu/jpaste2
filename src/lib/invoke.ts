@@ -126,12 +126,12 @@ export const api = {
   },
 
   // ── Image Viewer ────────────────────────────────────────────────────
-  getEntriesRegex(pattern: string, tagMask?: number): Promise<Entry[]> {
+  getEntriesRegex(pattern: string, tagMask?: number, sortField?: string, sortOrder?: string): Promise<Entry[]> {
     return invoke('get_entries_regex', {
       pattern,
       tagMask: tagMask ?? 0,
-      sortField: 'updated_at',
-      sortOrder: 'DESC',
+      sortField: sortField ?? 'updated_at',
+      sortOrder: sortOrder ?? 'DESC',
     });
   },
 

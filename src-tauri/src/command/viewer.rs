@@ -102,7 +102,7 @@ const VIEWERS: &[ViewerMeta] = &[
     ViewerMeta { label_prefix: "calc-viewer", route: "/viewer/calc", title: "计算器", w: 450.0, h: 600.0, min_w: 400.0, min_h: 500.0 },
     ViewerMeta { label_prefix: "decoder-viewer", route: "/viewer/decoder", title: "解码工具", w: 750.0, h: 550.0, min_w: 550.0, min_h: 450.0 },
     ViewerMeta { label_prefix: "timestamp-viewer", route: "/viewer/timestamp", title: "时间戳转换", w: 550.0, h: 500.0, min_w: 450.0, min_h: 400.0 },
-    ViewerMeta { label_prefix: "qr-viewer", route: "/viewer/qr", title: "二维码生成", w: 520.0, h: 620.0, min_w: 460.0, min_h: 520.0 },
+    ViewerMeta { label_prefix: "qr-viewer", route: "/viewer/qr", title: "二维码生成", w: 600.0, h: 760.0, min_w: 500.0, min_h: 600.0 },
     ViewerMeta { label_prefix: "svg-viewer", route: "/viewer/svg", title: "SVG 转 PNG", w: 640.0, h: 640.0, min_w: 520.0, min_h: 520.0 },
     ViewerMeta { label_prefix: "kanban-viewer", route: "/viewer/kanban", title: "看板", w: 1200.0, h: 800.0, min_w: 800.0, min_h: 600.0 },
 ];

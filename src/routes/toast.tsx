@@ -12,7 +12,7 @@ const ACTION_META: Record<string, { icon: string; label: string }> = {
   json:      { icon: 'code',      label: 'JSON 查看' },
   curl:      { icon: 'terminal',  label: 'HTTP 调试' },
   ws:        { icon: 'wifi',      label: 'WS 调试' },
-  decoder:   { icon: 'code',      label: '解码' },
+  decoder:   { icon: 'type',      label: '解码' },
   timestamp: { icon: 'clock',     label: '时间戳转换' },
   math:      { icon: 'calculator',label: '计算' },
   folder:    { icon: 'folder',    label: '打开所在目录' },

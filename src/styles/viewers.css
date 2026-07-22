@@ -1533,17 +1533,22 @@
   font-variant-numeric: tabular-nums;
 }
 
+.gen-form-section {
+  flex: 0 0 auto;
+}
+
 .gen-preview-section {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
   min-height: 0;
+  overflow: hidden;
 }
 
 .gen-preview {
   max-width: 100%;
-  max-height: 280px;
+  max-height: 100%;
   object-fit: contain;
   image-rendering: pixelated;
   background:
